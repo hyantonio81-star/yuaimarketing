@@ -11,9 +11,11 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "build": "npm run build -w backend && npm run build -w frontend"
   },
   "devDependencies": {
+    "@vercel/node": "^3.2.0",
     "concurrently": "^9.0.0",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^9.1.0",
