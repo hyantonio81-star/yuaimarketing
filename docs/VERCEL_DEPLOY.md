@@ -23,6 +23,10 @@
 
 추가로 수정할 필요 없이 **Deploy**를 누르면 됩니다.
 
+**"No Output Directory named dist found" 오류가 났다면**  
+Vercel에서 **Root Directory**를 **`frontend`**로 설정한 경우입니다. 이때는 `frontend/vercel.json`이 적용되어 출력 디렉터리가 `dist`로 지정됩니다. 저장소를 다시 배포(Re-deploy)해 보세요.  
+프론트와 API를 **한 프로젝트에서** 함께 쓰려면 Root Directory를 **비워 두고** 저장소 루트로 배포하는 방식을 사용하세요.
+
 ---
 
 ## 3. 환경 변수
