@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "a92b51f5-364a-48c0-b767-fd901868973b"
+      }
+    },
+    "android": {
+      "package": "com.antoyu.nexusai"
+    }
+  }
+}
