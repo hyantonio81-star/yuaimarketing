@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { monitorKoreaProcurement } from "../services/koreaProcurementService.js";
-import { monitorInternationalTenders } from "../services/internationalTendersService.js";
+import { monitorInternationalTendersAsync } from "../services/internationalTendersService.js";
 import { checkQualification } from "../services/tenderQualificationService.js";
 import { calculateOptimalBid, type TenderForBid } from "../services/optimalBidService.js";
 import { generateProposal, type TenderForProposal } from "../services/proposalGenerationService.js";
@@ -50,7 +50,7 @@ export async function govRoutes(fastify: FastifyInstance) {
             sectors: Array.isArray(profile.sectors) ? profile.sectors.map(String) : undefined,
           }
         : undefined;
-    return monitorInternationalTenders(userProfile);
+    return await monitorInternationalTendersAsync(userProfile);
   });
 
   fastify.post<{

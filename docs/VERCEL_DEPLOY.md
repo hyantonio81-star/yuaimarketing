@@ -1,4 +1,4 @@
-# Vercel 배포 가이드 (NEXUS AI)
+# Vercel 배포 가이드 (YuantO Ai)
 
 프론트엔드와 백엔드 API를 **한 Vercel 프로젝트**에서 함께 배포하는 방법입니다. Supabase는 이미 Vercel과 연동되어 있다고 가정합니다.
 
@@ -57,7 +57,7 @@ Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variable
 
 - **프론트**: `https://your-project.vercel.app`
 - **API 상태**: `https://your-project.vercel.app/api/health`  
-  → `{ "status": "ok", "service": "nexus-ai-backend", "supabase": "configured" }` 형태면 정상입니다.
+  → `{ "status": "ok", "service": "yuanto-ai-backend", "supabase": "configured" }` 형태면 정상입니다.
 
 ---
 
@@ -69,6 +69,41 @@ Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variable
 2. **Build Command**: `npm run build`
 3. **Output Directory**: `dist`
 4. **Environment Variables**: `VITE_API_URL`에 백엔드 URL (예: `https://your-backend.railway.app`) 설정 후 재배포.
+
+---
+
+---
+
+## 6. 404 DEPLOYMENT_NOT_FOUND / 점검 목록
+
+**증상**: 배포된 URL 접속 시 `404: DEPLOYMENT_NOT_FOUND`가 뜸.
+
+**원인**: 프로덕션 배포가 한 번도 성공하지 않았거나, 잘못된 URL로 접속한 경우.
+
+**확인 순서**:
+1. **Vercel** → 해당 프로젝트 → **Deployments**: 최신 배포가 **Ready**(초록)인지 확인.
+2. **실패(빨간 X)**면 해당 배포 클릭 → **Build Logs**에서 에러 확인.  
+   - `No Output Directory named "dist"` → **Settings** → **Build** → **Output Directory**를 `frontend/dist`(루트 배포 시) 또는 `dist`(Root Directory = frontend 시)로 설정 후 **Redeploy**.
+3. 접속 URL이 **Production 도메인**인지 확인 (예: `https://yuaimarketing.vercel.app`).  
+   배포별 URL(예: `https://yuaimarketing-xxx-xxx.vercel.app`)은 해당 배포가 삭제되면 404가 됨.
+
+---
+
+## 7. Vercel–Supabase 연동 체크리스트
+
+배포는 성공했는데 Supabase(로그인, DB, Realtime 등)가 동작하지 않을 때 확인할 것.
+
+| 구분 | Vercel 환경 변수 | 설명 |
+|------|------------------|------|
+| 프론트(빌드 시) | `VITE_SUPABASE_URL` | Supabase 프로젝트 URL (예: `https://xxxx.supabase.co`) |
+| 프론트(빌드 시) | `VITE_SUPABASE_ANON_KEY` | Supabase anon/public key (프론트 전용, service_role 사용 금지) |
+| API(런타임) | `SUPABASE_URL` | 위와 동일 URL |
+| API(런타임) | `SUPABASE_ANON_KEY` | 위와 동일 anon key |
+| API(선택) | `SUPABASE_SERVICE_ROLE_KEY` | 관리자 작업 필요 시만 추가 |
+
+- **Supabase Integration**을 Vercel에 연결했다면, 변수 이름이 위와 일치하는지 확인.  
+  다르면 **Override** 또는 수동으로 위 이름으로 추가.
+- 환경 변수 수정 후에는 **Redeploy** 필요 (특히 `VITE_*`는 빌드 시 주입됨).
 
 ---
 

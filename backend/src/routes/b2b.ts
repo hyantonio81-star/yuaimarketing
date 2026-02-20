@@ -28,9 +28,11 @@ export async function b2bRoutes(app: FastifyInstance) {
     return marketScore(item);
   });
 
-  app.get<{ Querystring: { item?: string } }>("/market-report", async (req) => {
+  app.get<{ Querystring: { item?: string; lang?: string } }>("/market-report", async (req) => {
     const item = req.query?.item ?? "제품명";
-    return generateMarketReport(item);
+    const lang = (req.query?.lang ?? "ko") as "ko" | "en" | "es";
+    const validLang = ["ko", "en", "es"].includes(lang) ? lang : "ko";
+    return generateMarketReport(item, validLang);
   });
 
   app.post<{
@@ -56,8 +58,10 @@ export async function b2bRoutes(app: FastifyInstance) {
     );
   });
 
-  app.get("/customer-insight-report", async () => {
-    return generateCustomerInsightReport();
+  app.get<{ Querystring: { lang?: string } }>("/customer-insight-report", async (req) => {
+    const lang = (req.query?.lang ?? "ko") as "ko" | "en" | "es";
+    const validLang = ["ko", "en", "es"].includes(lang) ? lang : "ko";
+    return generateCustomerInsightReport(validLang);
   });
 
   app.get<{

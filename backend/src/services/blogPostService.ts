@@ -151,3 +151,29 @@ export function generateBlogPost(
     outline,
   };
 }
+
+export interface SuggestionsResult {
+  keyword: string;
+  outline: { heading: string; summary: string }[];
+  meta: { title: string; meta_description: string };
+  infographic_suggestions: string[];
+}
+
+/**
+ * 제안만 반환 (아웃라인, 메타, 인포그래픽 주제). 본문 생성 없음.
+ */
+export function getSuggestions(keyword: string): SuggestionsResult {
+  const k = (keyword || "키워드").trim() || "키워드";
+  const outline = gpt4CreateOutline(k);
+  const relatedKeywords = getLsiKeywords(k);
+  const sections = outline.map((s) => gpt4WriteSection(s, "professional", true));
+  const { title, meta_description } = seoOptimize(sections, k, relatedKeywords, "Grade 8");
+  const mergedContent = sections.join("\n\n");
+  const infographic_suggestions = suggestDataVisualization(mergedContent);
+  return {
+    keyword: k,
+    outline,
+    meta: { title, meta_description },
+    infographic_suggestions,
+  };
+}

@@ -25,31 +25,33 @@ import {
 } from "lucide-react";
 import SectionCard from "../components/SectionCard";
 import { api } from "../lib/api";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
 const SOURCES = [
-  { name: "Google Trends API", desc: "실시간 검색 트렌드", icon: TrendingUp },
-  { name: "Statista API", desc: "통계 데이터", icon: BarChart3 },
-  { name: "CB Insights", desc: "스타트업/투자 트렌드", icon: Rocket },
-  { name: "PitchBook", desc: "M&A, 펀딩 데이터", icon: Handshake },
-  { name: "UN Comtrade", desc: "무역 통계", icon: Globe },
-  { name: "World Bank Open Data", desc: "경제 지표", icon: Landmark },
+  { name: "Google Trends API", descKey: "sourceDescTrends", icon: TrendingUp },
+  { name: "Statista API", descKey: "sourceDescStats", icon: BarChart3 },
+  { name: "CB Insights", descKey: "sourceDescStartup", icon: Rocket },
+  { name: "PitchBook", descKey: "sourceDescMa", icon: Handshake },
+  { name: "UN Comtrade", descKey: "sourceDescTrade", icon: Globe },
+  { name: "World Bank Open Data", descKey: "sourceDescEconomic", icon: Landmark },
 ];
 
 export default function B2BTrade() {
+  const { t } = useLanguage();
   return (
     <div className="p-6 lg:p-8">
       <header className="mb-8">
         <h1 className="text-2xl font-bold text-foreground tracking-tight">
-          Pillar 2 — B2B Trade
+          {t("b2bTrade.pillarTitle")}
         </h1>
         <p className="text-muted-foreground mt-1">
-          트렌드·경제 데이터 소스 및 수집/저장 (20%)
+          {t("b2bTrade.pillarSubtitle")}
         </p>
       </header>
 
-      <SectionCard title="소스 (Data Sources)" className="mb-6">
+      <SectionCard title={t("b2bTrade.sourcesTitle")} className="mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {SOURCES.map(({ name, desc, icon: Icon }) => (
+          {SOURCES.map(({ name, descKey, icon: Icon }) => (
             <div
               key={name}
               className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border"
@@ -57,7 +59,7 @@ export default function B2BTrade() {
               <Icon className="w-5 h-5 text-pillar2 shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-foreground">{name}</div>
-                <div className="text-sm text-muted-foreground">{desc}</div>
+                <div className="text-sm text-muted-foreground">{t(`b2bTrade.${descKey}`)}</div>
               </div>
             </div>
           ))}
@@ -65,19 +67,19 @@ export default function B2BTrade() {
       </SectionCard>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <SectionCard title="수집 주기 (Collection Schedule)">
+        <SectionCard title={t("b2bTrade.collectionSchedule")}>
           <div className="flex items-center gap-4 p-4 rounded-lg bg-pillar2/10 border border-pillar2/30">
             <div className="p-2 rounded-md bg-pillar2/20 text-pillar2">
               <Clock className="w-6 h-6" />
             </div>
             <div>
-              <div className="font-semibold text-foreground">일일 1회</div>
-              <div className="text-muted-foreground">새벽 2시 (Asia/Seoul)</div>
+              <div className="font-semibold text-foreground">{t("b2bTrade.dailyOnce")}</div>
+              <div className="text-muted-foreground">{t("b2bTrade.scheduleTime")}</div>
             </div>
           </div>
         </SectionCard>
 
-        <SectionCard title="저장 (Storage)">
+        <SectionCard title={t("b2bTrade.storage")}>
           <div className="flex items-center gap-4 p-4 rounded-lg bg-card border border-border">
             <div className="p-2 rounded-md bg-primary/20 text-primary">
               <Database className="w-6 h-6" />
@@ -86,7 +88,7 @@ export default function B2BTrade() {
               <div className="font-semibold text-foreground">
                 PostgreSQL + TimescaleDB
               </div>
-              <div className="text-sm text-muted-foreground">시계열 (Time Series)</div>
+              <div className="text-sm text-muted-foreground">{t("b2bTrade.timeSeries")}</div>
             </div>
           </div>
         </SectionCard>
@@ -115,6 +117,7 @@ export default function B2BTrade() {
 }
 
 function LandedCostSection() {
+  const { t } = useLanguage();
   const [fobValue, setFobValue] = useState("10000");
   const [freight, setFreight] = useState("850");
   const [hsCode, setHsCode] = useState("8541");
@@ -140,7 +143,7 @@ function LandedCostSection() {
       });
       setResult(data);
     } catch (e) {
-      setError(e.message || "랜딩 코스트 계산 실패");
+      setError(e.message || t("b2bTrade.landedCostError"));
       setResult(null);
     } finally {
       setLoading(false);
@@ -148,9 +151,9 @@ function LandedCostSection() {
   };
 
   return (
-    <SectionCard title="총 랜딩 코스트 (calculate_total_landed_cost)" className="mb-6">
+    <SectionCard title={t("b2bTrade.landedCostTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        product + freight + insurance(1%) + 관세 + VAT + 기타수수료 → effective_markup %
+        {t("b2bTrade.landedCostFormula")}
       </p>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[100px]">
@@ -174,7 +177,7 @@ function LandedCostSection() {
           <input type="text" value={destCountry} onChange={(e) => setDestCountry(e.target.value)} placeholder="US" className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground text-sm" />
         </div>
         <button type="button" onClick={handleCalculate} disabled={loading} className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-          {loading ? "계산 중…" : "랜딩 코스트 계산"}
+          {loading ? t("b2bTrade.calculating") : t("b2bTrade.landedCostCalculate")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -199,6 +202,7 @@ function LandedCostSection() {
 }
 
 function ShippingQuotesSection() {
+  const { t } = useLanguage();
   const [origin, setOrigin] = useState("KRICN");
   const [dest, setDest] = useState("USLAX");
   const [weight, setWeight] = useState("100");
@@ -222,7 +226,7 @@ function ShippingQuotesSection() {
       });
       setResult(data);
     } catch (e) {
-      setError(e.message || "견적 조회 실패");
+      setError(e.message || t("b2bTrade.quotesError"));
       setResult(null);
     } finally {
       setLoading(false);
@@ -230,7 +234,7 @@ function ShippingQuotesSection() {
   };
 
   return (
-    <SectionCard title="배송 견적 (get_shipping_quotes)" className="mb-6">
+    <SectionCard title={t("b2bTrade.shippingQuotesTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
         DHL, FedEx, UPS, Maersk, COSCO, Local Forwarders · cheapest / fastest / best_value
       </p>
@@ -256,7 +260,7 @@ function ShippingQuotesSection() {
           <input type="text" value={incoterm} onChange={(e) => setIncoterm(e.target.value)} placeholder="CIF" className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground text-sm" />
         </div>
         <button type="button" onClick={handleGetQuotes} disabled={loading} className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-          {loading ? "조회 중…" : "견적 조회"}
+          {loading ? t("b2bTrade.querying") : t("b2bTrade.getQuotes")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -310,6 +314,7 @@ function ShippingQuotesSection() {
 }
 
 function HsCodeClassifySection() {
+  const { t } = useLanguage();
   const [productDesc, setProductDesc] = useState("Solar panel 300W photovoltaic module");
   const [country, setCountry] = useState("US");
   const [result, setResult] = useState(null);
@@ -326,7 +331,7 @@ function HsCodeClassifySection() {
       });
       setResult(data);
     } catch (e) {
-      setError(e.message || "HS 코드 분류 실패");
+      setError(e.message || t("b2bTrade.hsCodeError"));
       setResult(null);
     } finally {
       setLoading(false);
@@ -334,13 +339,13 @@ function HsCodeClassifySection() {
   };
 
   return (
-    <SectionCard title="HS 코드 분류 (classify_hs_code)" className="mb-6">
+    <SectionCard title={t("b2bTrade.hsCodeTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        제품 설명으로 6자리 HS 코드 추천 · 검증 · 관세율(KR → 목적지)
+        {t("b2bTrade.hsCodeDesc")}
       </p>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[280px] flex-1">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">제품 설명</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.productDesc")}</label>
           <input
             type="text"
             value={productDesc}
@@ -351,7 +356,7 @@ function HsCodeClassifySection() {
           />
         </div>
         <div className="min-w-[80px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">목적지 국가</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.destCountry")}</label>
           <input
             type="text"
             value={country}
@@ -366,7 +371,7 @@ function HsCodeClassifySection() {
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {loading ? "분류 중…" : "HS 코드 추천"}
+          {loading ? t("b2bTrade.classifying") : t("b2bTrade.hsRecommend")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -398,6 +403,7 @@ function HsCodeClassifySection() {
 }
 
 function CommercialInvoiceSection() {
+  const { t } = useLanguage();
   const [buyerName, setBuyerName] = useState("ABC Trading Co.");
   const [buyerAddress, setBuyerAddress] = useState("Berlin, Germany");
   const [buyerContact, setBuyerContact] = useState("procurement@abc-trading.de");
@@ -428,7 +434,7 @@ function CommercialInvoiceSection() {
         setResult(data);
       }
     } catch (e) {
-      setError(e.message || "Commercial Invoice 생성 실패");
+      setError(e.message || t("b2bTrade.invoiceError"));
       setResult(null);
     } finally {
       setLoading(false);
@@ -445,9 +451,9 @@ function CommercialInvoiceSection() {
   };
 
   return (
-    <SectionCard title="Commercial Invoice 생성 (generate_commercial_invoice)" className="mb-6">
+    <SectionCard title={t("b2bTrade.invoiceTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        주문 정보로 데이터 채움 → 다국어(en, de, zh, es) DOCX/PDF 생성
+        {t("b2bTrade.invoiceDesc")}
       </p>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="space-y-2">
@@ -526,7 +532,7 @@ function CommercialInvoiceSection() {
         disabled={loading}
         className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
       >
-        {loading ? "생성 중…" : "Commercial Invoice 생성"}
+        {loading ? t("b2bTrade.generating") : t("b2bTrade.generateInvoice")}
       </button>
       {error && <p className="text-sm text-destructive mt-3">{error}</p>}
       {result && (
@@ -557,7 +563,7 @@ function CommercialInvoiceSection() {
           </div>
           <p className="text-muted-foreground">Subtotal: ${result.data?.subtotal?.toLocaleString()} · Shipping: ${result.data?.shipping} · Insurance: ${result.data?.insurance} · <strong>Total: ${result.data?.total?.toLocaleString()}</strong></p>
           <div>
-            <p className="text-muted-foreground mb-1">다국어 생성 파일</p>
+            <p className="text-muted-foreground mb-1">{t("b2bTrade.multilingualFile")}</p>
             <ul className="flex flex-wrap gap-2">
               {result.documents && Object.entries(result.documents).map(([lang, doc]) => (
                 <li key={lang} className="px-2 py-1 rounded bg-muted text-muted-foreground font-mono text-xs">{doc.filename}</li>
@@ -571,6 +577,7 @@ function CommercialInvoiceSection() {
 }
 
 function TenderChecklistSection() {
+  const { t } = useLanguage();
   const [tenderTitle, setTenderTitle] = useState("Solar Panel Procurement - Tanzania");
   const [deadline, setDeadline] = useState("2026-03-15");
   const [data, setData] = useState(null);
@@ -587,17 +594,17 @@ function TenderChecklistSection() {
       });
       setData(res);
     } catch (e) {
-      setError(e.message || "체크리스트 생성 실패");
+      setError(e.message || t("b2bTrade.checklistError"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SectionCard title="입찰 체크리스트 (자동 생성)" className="mb-6">
+    <SectionCard title={t("b2bTrade.checklistTitle")} className="mb-6">
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[240px] flex-1">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">Tender 제목</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.tenderTitle")}</label>
           <input
             type="text"
             value={tenderTitle}
@@ -607,7 +614,7 @@ function TenderChecklistSection() {
           />
         </div>
         <div className="min-w-[120px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">마감일</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.deadline")}</label>
           <input
             type="text"
             value={deadline}
@@ -622,7 +629,7 @@ function TenderChecklistSection() {
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {loading ? "생성 중…" : "체크리스트 생성"}
+          {loading ? t("b2bTrade.generating") : t("b2bTrade.generateChecklist")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -630,11 +637,11 @@ function TenderChecklistSection() {
         <div className="space-y-5 rounded-lg border border-border bg-muted/20 p-5 text-sm">
           <div>
             <h3 className="text-lg font-bold text-foreground">Tender: {data.tenderTitle}</h3>
-            <p className="text-muted-foreground">필수 서류 (마감: {data.deadline})</p>
+            <p className="text-muted-foreground">{t("b2bTrade.requiredDocs").replace("{deadline}", data.deadline || "")}</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
-              <p className="font-medium text-primary mb-2">✅ 자동 준비 완료</p>
+              <p className="font-medium text-primary mb-2">✅ {t("b2bTrade.autoReady")}</p>
               <ul className="space-y-1">
                 {data.documents?.auto_ready?.map((d, i) => (
                   <li key={i} className="flex items-center gap-2">
@@ -644,7 +651,7 @@ function TenderChecklistSection() {
               </ul>
             </div>
             <div className="p-3 rounded-lg bg-accent/10 border border-accent/30">
-              <p className="font-medium text-accent mb-2">⚠️ 사용자 확인 필요</p>
+              <p className="font-medium text-accent mb-2">⚠️ {t("b2bTrade.userConfirm")}</p>
               <ul className="space-y-1">
                 {data.documents?.user_confirm?.map((d, i) => (
                   <li key={i} className="flex items-center gap-2">
@@ -654,7 +661,7 @@ function TenderChecklistSection() {
               </ul>
             </div>
             <div className="p-3 rounded-lg bg-muted border border-border">
-              <p className="font-medium text-destructive mb-2">❌ 전문가 필요</p>
+              <p className="font-medium text-destructive mb-2">❌ {t("b2bTrade.expertRequired")}</p>
               <ul className="space-y-1 text-muted-foreground">
                 {data.documents?.expert_required?.map((d, i) => (
                   <li key={i} className="flex items-center gap-2">
@@ -691,38 +698,39 @@ function TenderChecklistSection() {
 }
 
 function TradeDocumentSection() {
+  const { t } = useLanguage();
   const categories = [
     {
-      title: "1. 수출 서류",
+      title: t("b2bTrade.exportDocs"),
       items: [
         "Commercial Invoice",
         "Packing List",
         "Bill of Lading (B/L)",
-        "Certificate of Origin (원산지증명서)",
+        t("b2bTrade.certificateOrigin"),
         "Insurance Certificate",
       ],
     },
     {
-      title: "2. 인증서",
+      title: t("b2bTrade.certificates"),
       items: [
-        "ISO 9001 요약",
-        "CE 적합성 선언",
-        "시험 성적서",
+        t("b2bTrade.isoSummary"),
+        t("b2bTrade.ceDeclaration"),
+        t("b2bTrade.testReport"),
       ],
     },
     {
-      title: "3. 금융 서류",
+      title: t("b2bTrade.financialDocs"),
       items: [
         "Proforma Invoice",
-        "Letter of Credit (신용장) 초안",
+        t("b2bTrade.lcDraft"),
         "Payment Receipt",
       ],
     },
   ];
   return (
-    <SectionCard title="Module 2.3: 무역 서류 자동화 (4%) — Trade Document Generator" className="mb-6">
+    <SectionCard title={t("b2bTrade.tradeDocTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        자동 생성 가능 서류: 수출 서류, 인증서, 금융 서류
+        {t("b2bTrade.tradeDocDesc")}
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {categories.map(({ title, items }) => (
@@ -741,6 +749,7 @@ function TradeDocumentSection() {
 }
 
 function TenderEvaluationSection() {
+  const { t } = useLanguage();
   const [budget, setBudget] = useState("100000");
   const [quantity, setQuantity] = useState("500");
   const [country, setCountry] = useState("US");
@@ -762,20 +771,20 @@ function TenderEvaluationSection() {
       });
       setResult(data);
     } catch (e) {
-      setError(e.message || "입찰 평가 실패");
+      setError(e.message || t("b2bTrade.evaluateError"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SectionCard title="입찰 평가 (evaluate_tender)" className="mb-6">
+    <SectionCard title={t("b2bTrade.evaluateTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        실행가능성(40) + 수익성(30) + 경쟁강도(15) + 리스크(15) = 100 · 60점 이상 시 BID 권장
+        {t("b2bTrade.evaluateDesc")}
       </p>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[100px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">예산 (USD)</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.budgetUsd")}</label>
           <input
             type="number"
             value={budget}
@@ -785,7 +794,7 @@ function TenderEvaluationSection() {
           />
         </div>
         <div className="min-w-[80px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">수량</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.quantity")}</label>
           <input
             type="number"
             value={quantity}
@@ -795,7 +804,7 @@ function TenderEvaluationSection() {
           />
         </div>
         <div className="min-w-[80px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">국가</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.country")}</label>
           <input
             type="text"
             value={country}
@@ -805,7 +814,7 @@ function TenderEvaluationSection() {
           />
         </div>
         <div className="min-w-[80px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">인도조건</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.incoterm")}</label>
           <input
             type="text"
             value={delivery}
@@ -820,27 +829,27 @@ function TenderEvaluationSection() {
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {loading ? "평가 중…" : "입찰 평가"}
+          {loading ? t("b2bTrade.evaluating") : t("b2bTrade.evaluateTender")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
       {result && (
         <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4 text-sm">
           <div className="flex flex-wrap items-center gap-4">
-            <span className="text-xl font-bold text-foreground">총점: {result.total_score}</span>
+            <span className="text-xl font-bold text-foreground">{t("b2bTrade.totalScore")}: {result.total_score}</span>
             <span className={`px-3 py-1 rounded font-medium ${result.recommendation === "BID" ? "bg-primary/20 text-primary" : "bg-accent/20 text-accent"}`}>
               {result.recommendation}
             </span>
-            <span className="text-muted-foreground">예상 낙찰 확률: {(result.estimated_win_probability * 100).toFixed(1)}%</span>
+            <span className="text-muted-foreground">{t("b2bTrade.winProbability")}: {(result.estimated_win_probability * 100).toFixed(1)}%</span>
           </div>
           <div className="flex flex-wrap gap-4">
-            <span className="text-muted-foreground">실행가능성: {result.breakdown?.feasibility}/40</span>
-            <span className="text-muted-foreground">수익성: {result.breakdown?.profitability}/30</span>
-            <span className="text-muted-foreground">경쟁강도: {result.breakdown?.competition}/15</span>
-            <span className="text-muted-foreground">리스크: {result.breakdown?.risk}/15</span>
+            <span className="text-muted-foreground">{t("b2bTrade.feasibility")}: {result.breakdown?.feasibility}/40</span>
+            <span className="text-muted-foreground">{t("b2bTrade.profitability")}: {result.breakdown?.profitability}/30</span>
+            <span className="text-muted-foreground">{t("b2bTrade.competition")}: {result.breakdown?.competition}/15</span>
+            <span className="text-muted-foreground">{t("b2bTrade.risk")}: {result.breakdown?.risk}/15</span>
           </div>
           {result.key_risks?.length > 0 && (
-            <p className="text-muted-foreground">키 리스크 점수: {result.key_risks.join(", ")}</p>
+            <p className="text-muted-foreground">{t("b2bTrade.keyRisks")}: {result.key_risks.join(", ")}</p>
           )}
         </div>
       )}
@@ -849,6 +858,7 @@ function TenderEvaluationSection() {
 }
 
 function BuyerProfileSection() {
+  const { t } = useLanguage();
   const [buyerId, setBuyerId] = useState("");
   const [companyName, setCompanyName] = useState("ABC");
   const [country, setCountry] = useState("DE");
@@ -870,7 +880,7 @@ function BuyerProfileSection() {
       });
       setProfile(data);
     } catch (e) {
-      setError(e.message || "프로필 조회 실패");
+      setError(e.message || t("b2bTrade.profileError"));
     } finally {
       setLoading(false);
     }
@@ -879,13 +889,13 @@ function BuyerProfileSection() {
   const stars = (n) => (n >= 85 ? "⭐⭐⭐⭐⭐" : n >= 70 ? "⭐⭐⭐⭐" : n >= 55 ? "⭐⭐⭐" : "⭐⭐");
 
   return (
-    <SectionCard title="Buyer Profile (바이어 상세 프로필)" className="mb-6">
+    <SectionCard title={t("b2bTrade.buyerProfileTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        바이어 ID(매칭 결과) 또는 회사명·국가로 상세 프로필·AI 전략·이메일 초안 조회
+        {t("b2bTrade.buyerProfileDesc")}
       </p>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[120px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">바이어 ID</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.buyerId")}</label>
           <input
             type="text"
             value={buyerId}
@@ -895,7 +905,7 @@ function BuyerProfileSection() {
           />
         </div>
         <div className="min-w-[140px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">회사명</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.companyName")}</label>
           <input
             type="text"
             value={companyName}
@@ -905,7 +915,7 @@ function BuyerProfileSection() {
           />
         </div>
         <div className="min-w-[80px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">국가</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.country")}</label>
           <input
             type="text"
             value={country}
@@ -920,7 +930,7 @@ function BuyerProfileSection() {
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {loading ? "조회 중…" : "프로필 조회"}
+          {loading ? t("b2bTrade.querying") : t("b2bTrade.queryProfile")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -1126,6 +1136,7 @@ function BuyerMatchingSection() {
 }
 
 function CustomerInsightReportSection() {
+  const { language, t } = useLanguage();
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -1135,10 +1146,12 @@ function CustomerInsightReportSection() {
     setReport(null);
     setLoading(true);
     try {
-      const { data } = await api.get("/b2b/customer-insight-report");
+      const { data } = await api.get("/b2b/customer-insight-report", {
+        params: { lang: language || "ko" },
+      });
       setReport(data);
     } catch (e) {
-      setError(e.message || "리포트 생성 실패");
+      setError(e.message || t("common.reportError"));
     } finally {
       setLoading(false);
     }
@@ -1155,7 +1168,7 @@ function CustomerInsightReportSection() {
         disabled={loading}
         className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 mb-4"
       >
-        {loading ? "생성 중…" : "월간 리포트 생성"}
+        {loading ? t("common.generating") : "월간 리포트 생성"}
       </button>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
       {report && (
@@ -1383,6 +1396,7 @@ function MarketScoreSection() {
 }
 
 function MarketReportSection() {
+  const { language, t } = useLanguage();
   const [productName, setProductName] = useState("");
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1394,11 +1408,11 @@ function MarketReportSection() {
     setLoading(true);
     try {
       const { data } = await api.get("/b2b/market-report", {
-        params: { item: productName || "제품명" },
+        params: { item: productName || "제품명", lang: language || "ko" },
       });
       setReport(data);
     } catch (e) {
-      setError(e.message || "리포트 생성 실패");
+      setError(e.message || t("common.reportError"));
     } finally {
       setLoading(false);
     }
@@ -1422,7 +1436,7 @@ function MarketReportSection() {
           className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           <FileText className="w-4 h-4" />
-          {loading ? "생성 중…" : "리포트 생성"}
+          {loading ? t("common.generating") : t("common.reportGenerate")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}

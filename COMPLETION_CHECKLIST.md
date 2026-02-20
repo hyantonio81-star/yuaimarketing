@@ -1,4 +1,4 @@
-# NEXUS AI 앱 완성도 확인 체크리스트
+# YuantO Ai 앱 완성도 확인 체크리스트
 
 ## 빌드 확인 (완료)
 - [x] **Frontend** `npm run build` — 성공 (dist 생성)
@@ -42,7 +42,7 @@
 - [x] 최적 입찰가 산정 (Optimal Bid)
 - [x] 제안서 자동 생성 (Generate Proposal)
 
-### NEXUS Core (대시보드)
+### YuantO Core (대시보드)
 - [x] 일일 루틴 스케줄 표시
 - [x] 선제적 알림 (API 연동)
 - [x] 사용자 요청 처리 (의도 분류 → Pillar 라우팅)

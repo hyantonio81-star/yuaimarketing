@@ -8,6 +8,7 @@ import { b2bRoutes } from "./routes/b2b.js";
 import { b2cRoutes } from "./routes/b2c.js";
 import { govRoutes } from "./routes/gov.js";
 import { nexusRoutes } from "./routes/nexus.js";
+import { marketRoutes } from "./routes/market.js";
 import { registerRoutes } from "./routes/index.js";
 import { getSupabaseAdmin } from "./lib/supabaseServer.js";
 
@@ -23,7 +24,7 @@ async function buildServer() {
   fastify.get("/health", async () => {
     const supabase = getSupabaseAdmin();
     const supabaseStatus = supabase ? "configured" : "not_configured";
-    return { status: "ok", service: "nexus-ai-backend", supabase: supabaseStatus };
+    return { status: "ok", service: "yuanto-ai-backend", supabase: supabaseStatus };
   });
 
   registerRoutes(fastify);
@@ -36,6 +37,7 @@ async function buildServer() {
   await fastify.register(b2cRoutes, { prefix: "/api/b2c" });
   await fastify.register(govRoutes, { prefix: "/api/gov" });
   await fastify.register(nexusRoutes, { prefix: "/api/nexus" });
+  await fastify.register(marketRoutes, { prefix: "/api/markets" });
 
   return fastify;
 }

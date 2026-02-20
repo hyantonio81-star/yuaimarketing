@@ -17,7 +17,8 @@ function getNested(obj, path) {
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) || "ko";
+      const stored = localStorage.getItem(STORAGE_KEY) || "ko";
+      return translations[stored] ? stored : "ko";
     } catch {
       return "ko";
     }

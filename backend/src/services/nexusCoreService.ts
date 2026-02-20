@@ -1,5 +1,5 @@
 /**
- * NEXUS Core: 4 Pillar 오케스트레이션
+ * YuantO Core: 4 Pillar 오케스트레이션
  * - daily_routine: 매일 자동 실행 스케줄
  * - handle_user_request: 의도 분류 → Pillar 라우팅 → 응답 포맷
  * - proactive_alerts: 시장 기회 / 재고 / 입찰 마감 / 부정 리뷰 알림

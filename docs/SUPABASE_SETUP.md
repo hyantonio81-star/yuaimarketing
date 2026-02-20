@@ -1,6 +1,6 @@
 # Supabase 연동 가이드
 
-NEXUS AI는 **Supabase**를 서버(DB·Auth·Realtime 등)로 사용합니다.
+YuantO Ai는 **Supabase**를 서버(DB·Auth·Realtime 등)로 사용합니다.
 
 ---
 

@@ -1,4 +1,4 @@
-# NEXUS AI — 다음 단계 (LOCAL ↔ REPO 연동)
+# YuantO Ai — 다음 단계 (LOCAL ↔ REPO 연동)
 
 ## 1. Git 사용자 설정 (최초 1회)
 
@@ -14,7 +14,7 @@ git config --global user.name "Your Name"
 ```bash
 cd c:\Users\ANTONIO YU\Music\Mark01\nexus-ai
 git add .
-git commit -m "Initial commit: NEXUS AI monorepo (frontend + backend, i18n, Supabase)"
+git commit -m "Initial commit: YuantO Ai monorepo (frontend + backend, i18n, Supabase)"
 ```
 
 ## 3. 원격 저장소
