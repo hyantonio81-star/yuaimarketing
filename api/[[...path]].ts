@@ -10,12 +10,23 @@ async function getApp() {
   return buildServer();
 }
 
+function normalizeUrl(raw: string | undefined): string {
+  if (!raw || typeof raw !== "string") return "/";
+  let path = raw;
+  try {
+    if (raw.startsWith("http")) path = new URL(raw).pathname;
+    else if (!raw.startsWith("/")) path = `/api/${raw}`;
+  } catch {
+    path = raw.startsWith("/") ? raw : `/api/${raw}`;
+  }
+  return path === "/api/health" ? "/health" : path;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (!appPromise) appPromise = getApp();
     const app = await appPromise;
-    let url = req.url || "/";
-    if (url === "/api/health") url = "/health";
+    const url = normalizeUrl(req.url);
     const payload =
       req.method !== "GET" && req.method !== "HEAD" && req.body != null
         ? typeof req.body === "string"
@@ -29,10 +40,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payload,
     });
     res.status(response.statusCode);
-    response.headers.forEach((v, k) => res.setHeader(k, v));
-    res.send(response.payload);
+    const headers = response.headers as Record<string, string | string[] | undefined>;
+    if (headers && typeof headers === "object") {
+      for (const [k, v] of Object.entries(headers)) {
+        if (v !== undefined) res.setHeader(k, Array.isArray(v) ? v.join(", ") : v);
+      }
+    }
+    res.send(response.payload ?? "");
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("[api handler]", err);
+    res.status(500).json({
+      error: "Internal Server Error",
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
