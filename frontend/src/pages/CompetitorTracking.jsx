@@ -119,7 +119,7 @@ export default function CompetitorTracking() {
           }
         }
       } catch (e) {
-        if (!cancelled) setError(e?.response?.data?.error || e?.message || t("competitorTracking.saveFailed"));
+        if (!cancelled) setError(e?.apiMessage || e?.response?.data?.error || e?.response?.data?.message || e?.message || t("competitorTracking.loadFailed"));
       } finally {
         if (!cancelled) setLoading(false);
       }

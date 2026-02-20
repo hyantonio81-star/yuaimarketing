@@ -20,6 +20,17 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    const data = err?.response?.data;
+    if (data && typeof data === "object" && (data.message || data.error)) {
+      err.apiMessage = data.message || data.error;
+    }
+    return Promise.reject(err);
+  }
+);
+
 /** Market Intel (Pillar 1) */
 export const marketIntelApi = {
   getSources: (lang) =>

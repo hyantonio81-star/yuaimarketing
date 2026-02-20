@@ -122,7 +122,8 @@ export default function MarketIntel() {
           setServices([]);
           setResults([]);
           setReportMeta({ sections: [], default: null });
-          setError(e?.message || t("marketIntel.loadFailed"));
+          const msg = e?.apiMessage || e?.response?.data?.message || e?.response?.data?.error || e?.message;
+          setError(msg || t("marketIntel.loadFailed"));
         }
       } finally {
         if (!cancelled) setLoading(false);
