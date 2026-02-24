@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
+import { Shield, Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
@@ -29,10 +30,15 @@ export default function Login() {
     }
   }
 
+  const isSecure = typeof window !== "undefined" && window.location?.protocol === "https:";
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm border border-border rounded-lg bg-card p-6 shadow-lg">
-        <h1 className="text-xl font-bold text-primary mb-1">{t("appName")}</h1>
+        <div className="flex items-center gap-2 mb-2">
+          <Shield className="w-5 h-5 text-primary" aria-hidden />
+          <h1 className="text-xl font-bold text-primary">{t("appName")}</h1>
+        </div>
         <p className="text-sm text-muted-foreground mb-6">{t("auth.signInTitle")}</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -81,6 +87,12 @@ export default function Login() {
             </Link>
           </p>
         </form>
+        <div className="mt-6 pt-4 border-t border-border flex items-center gap-2 text-xs text-muted-foreground">
+          <Lock className="w-3.5 h-3.5 shrink-0" aria-hidden />
+          <span>
+            {isSecure ? t("auth.secureConnection") : t("auth.useHttps")}
+          </span>
+        </div>
       </div>
     </div>
   );

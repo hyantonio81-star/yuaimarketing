@@ -99,7 +99,8 @@ function designWinbackCampaign(customer: Customer): WinbackCampaign {
   };
 }
 
-export function churnPreventionCampaign(limit: number = 100): ChurnPreventionResult {
+/** @param _orgId scope for future org-specific campaigns */
+export function churnPreventionCampaign(limit: number = 100, _orgId?: string, _countryCode?: string): ChurnPreventionResult {
   const customers = getActiveCustomers();
   const at_risk: AtRiskItem[] = [];
 

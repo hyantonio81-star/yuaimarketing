@@ -4,16 +4,20 @@ import {
   TrendingUp,
   Building2,
   ShoppingCart,
+  Store,
   FileCheck,
+  Video,
   Crosshair,
   Search,
   Globe,
   LogOut,
   MapPin,
+  Shield,
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useMarket } from "../context/MarketContext.jsx";
+import ErrorBoundary from "./ErrorBoundary.jsx";
 
 const navKeys = [
   { to: "/", key: "nav.masterControl", icon: LayoutDashboard },
@@ -21,14 +25,18 @@ const navKeys = [
   { to: "/competitors", key: "nav.competitorTracking", icon: Crosshair },
   { to: "/seo", key: "nav.seoContent", icon: Search },
   { to: "/b2c", key: "nav.b2cCommerce", icon: ShoppingCart },
+  { to: "/b2c/ecommerce", key: "nav.ecommerce", icon: Store },
   { to: "/b2b", key: "nav.b2bTrade", icon: Building2 },
   { to: "/gov", key: "nav.govTender", icon: FileCheck },
+  { to: "/shorts", key: "nav.shortsAgent", icon: Video },
 ];
 
 export default function Layout() {
   const { t, language, setLanguage, languageCodes } = useLanguage();
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const { countries, currentCountryCode, setCountry, loading: marketLoading } = useMarket();
+  const navItems = [...navKeys];
+  if (isAdmin) navItems.push({ to: "/admin", key: "nav.admin", icon: Shield });
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -47,7 +55,7 @@ export default function Layout() {
           </p>
         </div>
         <nav className="flex-1 p-2 space-y-0.5">
-          {navKeys.map(({ to, key, icon: Icon }) => (
+          {navItems.map(({ to, key, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -123,7 +131,9 @@ export default function Layout() {
         </div>
       </aside>
       <main className="flex-1 overflow-auto">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

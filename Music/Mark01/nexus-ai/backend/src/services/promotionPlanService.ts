@@ -131,7 +131,8 @@ function estimatePromoCost(scenario: PromotionScenario): number {
   return Math.round(base + perUnit * 0.1);
 }
 
-export function planPromotion(product: ProductForPromo, goal: PromotionGoal = "revenue"): PromotionPlanResult {
+/** @param _orgId scope for future org-specific campaigns */
+export function planPromotion(product: ProductForPromo, goal: PromotionGoal = "revenue", _orgId?: string, _countryCode?: string): PromotionPlanResult {
   const scenarios: PromotionScenario[] = [];
 
   for (const discount of [5, 10, 15, 20, 25, 30]) {

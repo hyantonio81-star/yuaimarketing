@@ -91,12 +91,12 @@ export default function Dashboard() {
               <Clock className="w-4 h-4" />
               {t("dashboard.dailyRoutine")}
             </h3>
-            {routine?.schedule && (
+            {routine?.schedule && typeof routine.schedule === "object" && (
               <ul className="text-sm text-muted-foreground space-y-1">
                 {Object.entries(routine.schedule).map(([time, task]) => (
-                  <li key={time} className="flex justify-between">
-                    <span className="font-mono">{time}</span>
-                    <span>{task.replace(/_/g, " ")}</span>
+                  <li key={String(time)} className="flex justify-between">
+                    <span className="font-mono">{String(time)}</span>
+                    <span>{String(task ?? "").replace(/_/g, " ")}</span>
                   </li>
                 ))}
               </ul>
@@ -119,10 +119,10 @@ export default function Dashboard() {
                 {alerts.alerts.slice(0, 4).map((a, i) => (
                   <li key={i} className="text-sm rounded border border-border bg-muted/30 px-3 py-2">
                     <span className={`font-medium ${a.priority === "urgent" ? "text-destructive" : "text-foreground"}`}>
-                      [{a.type}]
+                      [{a?.type != null ? String(a.type) : ""}]
                     </span>{" "}
-                    {a.message}
-                    <div className="text-xs text-muted-foreground mt-1">→ {a.action}</div>
+                    {a?.message != null ? String(a.message) : ""}
+                    <div className="text-xs text-muted-foreground mt-1">→ {a?.action != null ? String(a.action) : ""}</div>
                   </li>
                 ))}
               </ul>
@@ -150,10 +150,10 @@ export default function Dashboard() {
               {t("common.run")}
             </button>
           </div>
-          {requestResult && (
+          {requestResult && typeof requestResult === "object" && (
             <div className="mt-2 text-sm rounded border border-border bg-muted/20 p-3">
-              <span className="text-muted-foreground">의도: {requestResult.intent?.category}</span>
-              <pre className="mt-1 text-xs whitespace-pre-wrap">{requestResult.formatted_response}</pre>
+              <span className="text-muted-foreground">의도: {requestResult.intent?.category != null ? String(requestResult.intent.category) : "—"}</span>
+              <pre className="mt-1 text-xs whitespace-pre-wrap">{requestResult.formatted_response != null ? String(requestResult.formatted_response) : ""}</pre>
             </div>
           )}
         </div>

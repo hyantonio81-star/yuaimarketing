@@ -7,8 +7,10 @@ import { seoRoutes } from "./routes/seo.js";
 import { b2bRoutes } from "./routes/b2b.js";
 import { b2cRoutes } from "./routes/b2c.js";
 import { govRoutes } from "./routes/gov.js";
+import { shortsRoutes } from "./routes/shorts.js";
 import { nexusRoutes } from "./routes/nexus.js";
 import { marketRoutes } from "./routes/market.js";
+import { adminRoutes } from "./routes/admin.js";
 import { registerRoutes } from "./routes/index.js";
 import { getSupabaseAdmin } from "./lib/supabaseServer.js";
 
@@ -17,8 +19,20 @@ const fastify = Fastify({
 });
 
 async function buildServer() {
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.trim();
   await fastify.register(cors, {
-    origin: true
+    origin: allowedOrigins ? allowedOrigins.split(",").map((o) => o.trim()).filter(Boolean) : true,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Organization-Id", "X-Country"],
+  });
+
+  /** 보안 헤더: XSS·클릭재킹 완화 */
+  fastify.addHook("onRequest", async (_request, reply) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+    reply.header("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
   });
 
   fastify.get("/health", async () => {
@@ -36,8 +50,10 @@ async function buildServer() {
   await fastify.register(b2bRoutes, { prefix: "/api/b2b" });
   await fastify.register(b2cRoutes, { prefix: "/api/b2c" });
   await fastify.register(govRoutes, { prefix: "/api/gov" });
+  await fastify.register(shortsRoutes, { prefix: "/api/shorts" });
   await fastify.register(nexusRoutes, { prefix: "/api/nexus" });
   await fastify.register(marketRoutes, { prefix: "/api/markets" });
+  await fastify.register(adminRoutes, { prefix: "/api/admin" });
 
   return fastify;
 }

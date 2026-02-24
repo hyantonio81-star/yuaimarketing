@@ -21,4 +21,24 @@ export const COUNTRY_MASTER: CountryMaster[] = [
   { country_code: "VE", name: "베네수엘라", name_en: "Venezuela", locale: "es-VE", currency: "VES", region: "Latin America" },
   { country_code: "CU", name: "쿠바", name_en: "Cuba", locale: "es-CU", currency: "CUP", region: "Latin America" },
   { country_code: "PA", name: "파나마", name_en: "Panama", locale: "es-PA", currency: "PAB", region: "Latin America" },
+  // Central America
+  { country_code: "GT", name: "과테말라", name_en: "Guatemala", locale: "es-GT", currency: "GTQ", region: "Central America" },
+  { country_code: "HN", name: "온두라스", name_en: "Honduras", locale: "es-HN", currency: "HNL", region: "Central America" },
+  { country_code: "SV", name: "엘살바도르", name_en: "El Salvador", locale: "es-SV", currency: "USD", region: "Central America" },
+  { country_code: "NI", name: "니카라과", name_en: "Nicaragua", locale: "es-NI", currency: "NIO", region: "Central America" },
+  { country_code: "CR", name: "코스타리카", name_en: "Costa Rica", locale: "es-CR", currency: "CRC", region: "Central America" },
+  // Middle East
+  { country_code: "AE", name: "아랍에미리트", name_en: "United Arab Emirates", locale: "ar-AE", currency: "AED", region: "Middle East" },
+  { country_code: "SA", name: "사우디아라비아", name_en: "Saudi Arabia", locale: "ar-SA", currency: "SAR", region: "Middle East" },
+  { country_code: "QA", name: "카타르", name_en: "Qatar", locale: "ar-QA", currency: "QAR", region: "Middle East" },
+  { country_code: "KW", name: "쿠웨이트", name_en: "Kuwait", locale: "ar-KW", currency: "KWD", region: "Middle East" },
+  // Africa
+  { country_code: "EG", name: "이집트", name_en: "Egypt", locale: "ar-EG", currency: "EGP", region: "Africa" },
+  { country_code: "ZA", name: "남아프리카공화국", name_en: "South Africa", locale: "en-ZA", currency: "ZAR", region: "Africa" },
+  { country_code: "NG", name: "나이지리아", name_en: "Nigeria", locale: "en-NG", currency: "NGN", region: "Africa" },
+  // Europe (additional)
+  { country_code: "NL", name: "네덜란드", name_en: "Netherlands", locale: "nl-NL", currency: "EUR", region: "Europe" },
+  { country_code: "FR", name: "프랑스", name_en: "France", locale: "fr-FR", currency: "EUR", region: "Europe" },
+  { country_code: "IT", name: "이탈리아", name_en: "Italy", locale: "it-IT", currency: "EUR", region: "Europe" },
+  { country_code: "ES", name: "스페인", name_en: "Spain", locale: "es-ES", currency: "EUR", region: "Europe" },
 ];

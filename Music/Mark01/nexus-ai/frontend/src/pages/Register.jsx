@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { api } from "../lib/api.js";
-import { Building2, Globe, User, ChevronRight, MapPin } from "lucide-react";
+import { Building2, Globe, User, ChevronRight, MapPin, Lock } from "lucide-react";
 
 export default function Register() {
   const { t } = useLanguage();
@@ -357,6 +357,14 @@ export default function Register() {
             </Link>
           </div>
         </form>
+        <div className="mt-6 pt-4 border-t border-border flex items-center gap-2 text-xs text-muted-foreground">
+          <Lock className="w-3.5 h-3.5 shrink-0" aria-hidden />
+          <span>
+            {typeof window !== "undefined" && window.location?.protocol === "https:"
+              ? t("auth.secureConnection")
+              : t("auth.useHttps")}
+          </span>
+        </div>
       </div>
     </div>
   );

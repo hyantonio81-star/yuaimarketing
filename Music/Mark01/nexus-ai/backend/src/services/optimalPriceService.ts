@@ -104,7 +104,8 @@ function predictSales(_product: ProductInput, price: number): number {
   return Math.max(10, Math.round(200 - (price / 200) + (simpleHash(_product.sku) % 30)));
 }
 
-export function calculateOptimalPrice(product: ProductInput, channel: string): OptimalPriceResult {
+/** @param _orgId scope for future DB/connected channels */
+export function calculateOptimalPrice(product: ProductInput, channel: string, _orgId?: string, _countryCode?: string): OptimalPriceResult {
   const factors = {
     base_cost: product.cost,
     target_margin: product.target_margin,

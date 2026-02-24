@@ -1,25 +1,40 @@
-import { useState } from "react";
-import { Tag, TrendingUp, AlertTriangle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Tag, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react";
 import SectionCard from "../../components/SectionCard";
 import { api } from "../../lib/api";
 import { useLanguage } from "../../context/LanguageContext.jsx";
 
-const PRICE_CHANNELS = ["Coupang", "Naver SmartStore", "Shopify", "Amazon", "11번가"];
+const DEFAULT_PRICE_CHANNELS = ["Coupang", "Naver SmartStore", "Shopify", "Amazon", "11번가"];
 
 function getError(t, e) {
   return e?.response?.data?.error ? t("b2cCommerce.errGeneric") : t("b2cCommerce.errSkuCostMargin");
 }
 
-export default function OptimalPriceSection() {
+/** @param {Array<{ channel: string }>} [connectedChannels] from /b2c/connections — shown first in channel list */
+export default function OptimalPriceSection({ connectedChannels = [] }) {
+  const connectedNames = (connectedChannels || []).map((c) => (c.channel === "shopify" ? "Shopify" : c.channel));
+  const priceChannels = [
+    ...connectedNames.filter((n) => DEFAULT_PRICE_CHANNELS.includes(n)),
+    ...DEFAULT_PRICE_CHANNELS.filter((ch) => !connectedNames.includes(ch)),
+  ];
+  if (priceChannels.length === 0) priceChannels.push(...DEFAULT_PRICE_CHANNELS);
   const { t } = useLanguage();
   const [priceSku, setPriceSku] = useState("");
   const [priceCost, setPriceCost] = useState("");
   const [priceMargin, setPriceMargin] = useState("0.3");
   const [priceCurrent, setPriceCurrent] = useState("");
-  const [priceChannel, setPriceChannel] = useState("Coupang");
+  const [priceChannel, setPriceChannel] = useState(priceChannels[0] || "Coupang");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+
+  // Keep channel selection in sync when connectedChannels change (e.g. after connect/disconnect)
+  useEffect(() => {
+    const first = priceChannels[0];
+    if (first && priceChannel !== first && !priceChannels.includes(priceChannel)) {
+      setPriceChannel(first);
+    }
+  }, [priceChannels.join(","), priceChannel]);
 
   const run = async () => {
     const cost = Number(priceCost);
@@ -50,6 +65,12 @@ export default function OptimalPriceSection() {
   return (
     <SectionCard title={t("b2cCommerce.optimalPriceTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">{t("b2cCommerce.optimalPriceDesc")}</p>
+      {connectedNames.length > 0 && (
+        <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
+          <CheckCircle className="w-3.5 h-3.5 text-primary" />
+          {t("ecommerce.connectedChannelUsedInSync")} — {connectedNames.join(", ")}
+        </p>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2cCommerce.sku")}</label>
@@ -101,8 +122,8 @@ export default function OptimalPriceSection() {
             onChange={(e) => setPriceChannel(e.target.value)}
             className="rounded border border-border bg-background px-3 py-2 text-sm"
           >
-            {PRICE_CHANNELS.map((ch) => (
-              <option key={ch} value={ch}>{ch}</option>
+            {priceChannels.map((ch) => (
+              <option key={ch} value={ch}>{ch}{connectedNames.includes(ch) ? ` (${t("ecommerce.connected")})` : ""}</option>
             ))}
           </select>
         </div>

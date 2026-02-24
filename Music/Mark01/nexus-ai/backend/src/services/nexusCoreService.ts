@@ -82,9 +82,26 @@ export function getDailyRoutine(): DailyRoutineResult {
   };
 }
 
-export function runDailyRoutineTask(taskKey: string): { status: string; message?: string } {
+export async function runDailyRoutineTask(taskKey: string): Promise<{ status: string; message?: string; details?: Record<string, unknown> }> {
   const task = DAILY_SCHEDULE[taskKey];
   if (!task) return { status: "error", message: "Unknown task" };
+
+  if (task === "inventory_sync") {
+    const { runB2cInventorySyncTask } = await import("./b2cRoutineTasks.js");
+    const out = await runB2cInventorySyncTask();
+    return { status: out.status, message: out.message, details: out.details };
+  }
+  if (task === "price_optimization") {
+    const { runB2cPriceOptimizationTask } = await import("./b2cRoutineTasks.js");
+    const out = await runB2cPriceOptimizationTask();
+    return { status: out.status, message: out.message, details: out.details };
+  }
+  if (task === "churn_prevention_check") {
+    const { runB2cChurnPreventionTask } = await import("./b2cRoutineTasks.js");
+    const out = await runB2cChurnPreventionTask();
+    return { status: out.status, message: out.message, details: out.details };
+  }
+
   return { status: "ok", message: `Task ${task} executed (stub)` };
 }
 

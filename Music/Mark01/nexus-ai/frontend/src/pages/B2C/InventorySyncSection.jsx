@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, RefreshCw, AlertTriangle } from "lucide-react";
+import { Package, RefreshCw, AlertTriangle, CheckCircle } from "lucide-react";
 import SectionCard from "../../components/SectionCard";
 import { api } from "../../lib/api";
 import { useLanguage } from "../../context/LanguageContext.jsx";
@@ -8,7 +8,8 @@ function getError(t, e, fallbackKey = "b2cCommerce.errSyncFailed") {
   return e?.response?.data?.error ? t("b2cCommerce.errGeneric") : t(fallbackKey);
 }
 
-export default function InventorySyncSection() {
+/** @param {Array<{ channel: string }>} [connectedChannels] from /b2c/connections */
+export default function InventorySyncSection({ connectedChannels = [] }) {
   const { t } = useLanguage();
   const [sku, setSku] = useState("");
   const [quantityChange, setQuantityChange] = useState("");
@@ -34,9 +35,17 @@ export default function InventorySyncSection() {
     }
   };
 
+  const connectedNames = (connectedChannels || []).map((c) => (c.channel === "shopify" ? "Shopify" : c.channel));
+
   return (
     <SectionCard title={t("b2cCommerce.inventorySyncTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">{t("b2cCommerce.inventorySyncDesc")}</p>
+      {connectedNames.length > 0 && (
+        <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
+          <CheckCircle className="w-3.5 h-3.5 text-primary" />
+          {t("ecommerce.connectedChannelUsedInSync")} — {connectedNames.join(", ")}
+        </p>
+      )}
       <div className="flex flex-wrap items-end gap-4 mb-4">
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2cCommerce.sku")}</label>
@@ -90,7 +99,12 @@ export default function InventorySyncSection() {
             <ul className="space-y-2">
               {result.channel_results?.map((r, i) => (
                 <li key={i} className="flex justify-between items-center text-sm rounded border border-border bg-background/50 px-3 py-2">
-                  <span className="font-medium">{r.channel}</span>
+                  <span className="font-medium flex items-center gap-2">
+                    {r.channel}
+                    {connectedNames.includes(r.channel) && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-primary/15 text-primary">{t("ecommerce.connected")}</span>
+                    )}
+                  </span>
                   <span className="text-muted-foreground">
                     {r.action === "restock_or_hide" ? t("b2cCommerce.actionRestockOrHide") : t("b2cCommerce.allocationSafety").replace("{allocation}", r.allocation).replace("{safety}", r.safety_stock)}
                   </span>

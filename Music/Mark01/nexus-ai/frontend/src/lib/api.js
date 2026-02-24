@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getCurrentCountryCode } from "./marketStore.js";
+import { supabase } from "./supabase.js";
 
 const explicit = import.meta.env.VITE_API_URL;
 const API_BASE =
@@ -14,11 +15,30 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   const country = getCurrentCountryCode();
   if (country) config.headers["X-Country"] = country;
+  if (supabase && typeof window !== "undefined") {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) config.headers.Authorization = `Bearer ${session.access_token}`;
+    } catch (_) {
+      // auth not ready or network error — proceed without token
+    }
+  }
   return config;
 });
+
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    const data = err?.response?.data;
+    if (data && typeof data === "object" && (data.message || data.error)) {
+      err.apiMessage = data.message || data.error;
+    }
+    return Promise.reject(err);
+  }
+);
 
 /** Market Intel (Pillar 1) */
 export const marketIntelApi = {
@@ -106,6 +126,60 @@ export const competitorsApi = {
     api.put("/competitors/tracking-profile", { orgId: orgId ?? "default", country: country ?? "ALL", ...body }).then((r) => r.data),
   getIndustryOptions: (lang) =>
     api.get("/competitors/industry-options", { params: lang ? { lang } : {} }).then((r) => r.data),
+};
+
+/** Admin (관리자): 사용자 목록, bootstrap 상태/생성. Authorization Bearer 필요. */
+export const adminApi = {
+  getUsers: () => api.get("/admin/users").then((r) => r.data),
+  getBootstrapStatus: () => api.get("/admin/bootstrap-status").then((r) => r.data),
+  postBootstrap: (email, password) => api.post("/admin/bootstrap", { email, password }).then((r) => r.data),
+};
+
+/** YouTube Shorts 에이전트: 트렌드, 파이프라인, 작업, YouTube 연동, 아바타 */
+export const shortsApi = {
+  getTrends: (keywords, maxPerKeyword) =>
+    api.get("/shorts/trends", { params: { keywords: keywords?.join(","), max_per_keyword: maxPerKeyword } }).then((r) => r.data),
+  runPipeline: (keywords, options) =>
+    api.post("/shorts/run", { keywords: keywords ?? [], avatarPresetId: options?.avatarPresetId, enableTts: options?.enableTts }).then((r) => r.data),
+  getJobs: (limit) =>
+    api.get("/shorts/jobs", { params: { limit } }).then((r) => r.data),
+  getJob: (jobId) =>
+    api.get(`/shorts/jobs/${jobId}`).then((r) => r.data),
+  getAvatars: () =>
+    api.get("/shorts/avatars").then((r) => r.data),
+  getYoutubeAuthUrl: (state) =>
+    api.get("/shorts/youtube/auth-url", { params: state ? { state } : {} }).then((r) => r.data),
+  getYoutubeStatus: () =>
+    api.get("/shorts/youtube/status").then((r) => r.data),
+  disconnectYoutube: () =>
+    api.post("/shorts/youtube/disconnect").then((r) => r.data),
+};
+
+/** 이커머스 채널 연동 (B2C). orgId 있으면 X-Organization-Id 헤더로 전달. */
+export const ecommerceApi = {
+  getConnections: (orgId) =>
+    api.get("/b2c/connections", orgId ? { headers: { "X-Organization-Id": orgId } } : {}).then((r) => r.data),
+  connectChannel: (body, orgId) =>
+    api.post("/b2c/connections", body, orgId ? { headers: { "X-Organization-Id": orgId } } : {}).then((r) => r.data),
+  disconnectChannel: (channel, orgId) =>
+    api.delete("/b2c/connections", { params: { channel }, ...(orgId ? { headers: { "X-Organization-Id": orgId } } : {}) }).then((r) => r.data),
+};
+
+/** B2C AI 설정·승인 대기 (반자율화/자율화) */
+export const b2cApi = {
+  getSettings: (orgId) =>
+    api.get("/b2c/settings", orgId ? { headers: { "X-Organization-Id": orgId } } : {}).then((r) => r.data),
+  setSettings: (body, orgId) =>
+    api.put("/b2c/settings", body, orgId ? { headers: { "X-Organization-Id": orgId } } : {}).then((r) => r.data),
+  getPendingApprovals: (orgId, status) =>
+    api.get("/b2c/pending-approvals", {
+      params: status ? { status } : {},
+      ...(orgId ? { headers: { "X-Organization-Id": orgId } } : {}),
+    }).then((r) => r.data),
+  approvePending: (id, orgId) =>
+    api.post(`/b2c/pending-approvals/${id}/approve`, {}, orgId ? { headers: { "X-Organization-Id": orgId } } : {}).then((r) => r.data),
+  rejectPending: (id, orgId) =>
+    api.post(`/b2c/pending-approvals/${id}/reject`, {}, orgId ? { headers: { "X-Organization-Id": orgId } } : {}).then((r) => r.data),
 };
 
 export default api;

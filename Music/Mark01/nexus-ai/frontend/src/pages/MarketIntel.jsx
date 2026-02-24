@@ -40,9 +40,10 @@ const SCHEDULE_OPTIONS = [
 
 const REPORT_LANGUAGE_CODES = ["ko", "en", "es"];
 function getReportLanguageOptions(t) {
+  const translate = typeof t === "function" ? t : (k) => k;
   return REPORT_LANGUAGE_CODES.map((value) => ({
     value,
-    label: t(`common.reportLang${value === "ko" ? "Ko" : value === "en" ? "En" : "Es"}`),
+    label: translate(`common.reportLang${value === "ko" ? "Ko" : value === "en" ? "En" : "Es"}`),
   }));
 }
 
@@ -99,20 +100,22 @@ export default function MarketIntel() {
           marketIntelApi.getReportOptions(reportLang),
         ]);
         if (!cancelled) {
-          setTools(toolsRes.tools ?? []);
-          setServices(servicesRes.services ?? []);
-          setResults(resultsRes.results ?? []);
-          setReportMeta({ sections: optionsRes.sections ?? [], default: optionsRes.default });
-          if (optionsRes.default) {
+          setTools(Array.isArray(toolsRes?.tools) ? toolsRes.tools : []);
+          setServices(Array.isArray(servicesRes?.services) ? servicesRes.services : []);
+          setResults(Array.isArray(resultsRes?.results) ? resultsRes.results : []);
+          const opts = optionsRes && typeof optionsRes === "object" ? optionsRes : {};
+          setReportMeta({ sections: Array.isArray(opts.sections) ? opts.sections : [], default: opts.default ?? null });
+          const def = opts.default && typeof opts.default === "object" ? opts.default : null;
+          if (def) {
             setReportOptions((prev) => ({
               ...prev,
-              format: optionsRes.default.format ?? prev.format,
-              scope: optionsRes.default.scope ?? prev.scope,
-              schedule: optionsRes.default.schedule ?? prev.schedule,
-              sections: optionsRes.default.sections ?? prev.sections,
-              language: optionsRes.default.language ?? prev.language ?? "ko",
-              report_tier: optionsRes.default.report_tier ?? prev.report_tier ?? "medium",
-              target_page_count: optionsRes.default.target_page_count ?? prev.target_page_count ?? 20,
+              format: def.format ?? prev.format,
+              scope: def.scope ?? prev.scope,
+              schedule: def.schedule ?? prev.schedule,
+              sections: Array.isArray(def.sections) ? def.sections : prev.sections,
+              language: def.language ?? prev.language ?? "ko",
+              report_tier: def.report_tier ?? prev.report_tier ?? "medium",
+              target_page_count: def.target_page_count ?? prev.target_page_count ?? 20,
             }));
           }
         }
@@ -122,7 +125,8 @@ export default function MarketIntel() {
           setServices([]);
           setResults([]);
           setReportMeta({ sections: [], default: null });
-          setError(e?.message || t("marketIntel.loadFailed"));
+          const raw = e?.apiMessage ?? e?.response?.data?.message ?? e?.response?.data?.error ?? e?.message;
+          setError(typeof raw === "string" ? raw : t("marketIntel.loadFailed"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -147,7 +151,7 @@ export default function MarketIntel() {
     marketIntelApi.getSources(lang).then((r) => {
       setSourcesList(r?.sources ?? []);
       setSourceCategories(r?.categories ?? []);
-    }).catch(() => { setSourcesList([]); setSourceCategories([]); setError(t("marketIntel.loadFailed")); });
+    }).catch(() => { setSourcesList([]); setSourceCategories([]); setError(typeof t === "function" ? t("marketIntel.loadFailed") : "Load failed"); });
   }, [uiLanguage, t]);
 
   useEffect(() => {
@@ -170,8 +174,8 @@ export default function MarketIntel() {
       marketIntelApi.getResearchTypes(uiLanguage || "ko"),
       marketIntelApi.getGranularRequest("default", country),
     ]).then(([countriesList, typesRes, reqRes]) => {
-      setCountries(countriesList);
-      setResearchTypeOptions(typesRes?.options ?? []);
+      setCountries(Array.isArray(countriesList) ? countriesList : []);
+      setResearchTypeOptions(Array.isArray(typesRes?.options) ? typesRes.options : []);
       const req = reqRes?.request;
       if (req) {
         setGranularEnabled(true);
@@ -206,7 +210,7 @@ export default function MarketIntel() {
       setRequestSaved(true);
       setTimeout(() => setRequestSaved(false), 2000);
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("marketIntel.saveFailed"));
+      setError(typeof (e?.response?.data?.error ?? e?.message) === "string" ? (e.response?.data?.error ?? e?.message) : t("marketIntel.saveFailed"));
     }
   };
 
@@ -220,7 +224,7 @@ export default function MarketIntel() {
   };
 
   const handleViewSegmentedResults = async () => {
-    if (!(granularRequest.research_types?.length >= 1)) {
+    if (!((granularRequest.research_types ?? []).length >= 1)) {
       setError(t("marketIntel.selectAtLeastOneResearchType"));
       return;
     }
@@ -240,7 +244,7 @@ export default function MarketIntel() {
       });
       setSegmentedResult(res);
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("marketIntel.loadFailed"));
+      setError(typeof (e?.response?.data?.error ?? e?.message) === "string" ? (e.response?.data?.error ?? e?.message) : t("marketIntel.loadFailed"));
     }
     setResultsLoading(false);
   };
@@ -251,7 +255,7 @@ export default function MarketIntel() {
     if (!country) return;
     marketIntelApi.getReportSettings("default", country).then((r) => {
       if (!cancelled && r?.options) setReportOptions((prev) => ({ ...prev, ...r.options }));
-    }).catch(() => setError(t("marketIntel.loadFailed")));
+    }).catch(() => setError(typeof t === "function" ? t("marketIntel.loadFailed") : "Load failed"));
     return () => { cancelled = true; };
   }, [t]);
 
@@ -265,18 +269,19 @@ export default function MarketIntel() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("marketIntel.saveFailed"));
+      setError(typeof (e?.response?.data?.error ?? e?.message) === "string" ? (e.response?.data?.error ?? e?.message) : t("marketIntel.saveFailed"));
     }
     setSaving(false);
   };
 
   const toggleSection = (id) => {
-    setReportOptions((prev) => ({
-      ...prev,
-      sections: prev.sections.includes(id)
-        ? prev.sections.filter((s) => s !== id)
-        : [...prev.sections, id],
-    }));
+    setReportOptions((prev) => {
+      const sections = prev.sections ?? [];
+      return {
+        ...prev,
+        sections: sections.includes(id) ? sections.filter((s) => s !== id) : [...sections, id],
+      };
+    });
   };
 
   const togglePaidSource = (sourceId) => {
@@ -292,7 +297,7 @@ export default function MarketIntel() {
       setPaidSourcesSaved(true);
       setTimeout(() => setPaidSourcesSaved(false), 2000);
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("marketIntel.saveFailed"));
+      setError(typeof (e?.response?.data?.error ?? e?.message) === "string" ? (e.response?.data?.error ?? e?.message) : t("marketIntel.saveFailed"));
     }
   };
 
@@ -306,13 +311,13 @@ export default function MarketIntel() {
       setReportGenMessage(job?.message || t("marketIntel.reportGenPlaceholder"));
       setTimeout(() => setReportGenMessage(null), 8000);
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("common.reportError"));
+      setError(typeof (e?.response?.data?.error ?? e?.message) === "string" ? (e.response?.data?.error ?? e?.message) : t("common.reportError"));
     }
     setReportGenLoading(false);
   };
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-6 lg:p-8 min-h-[60vh] relative z-0" role="main" aria-label="시장 인텔">
       <header className="mb-8">
         <h1 className="text-2xl font-bold text-foreground tracking-tight">
           {t("marketIntel.pillarTitle")}
@@ -322,10 +327,10 @@ export default function MarketIntel() {
         </p>
       </header>
 
-      {error && (
+      {error != null && error !== "" && (
         <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-center gap-2" role="alert">
           <AlertTriangle className="w-5 h-5 shrink-0" />
-          <span>{error}</span>
+          <span>{typeof error === "string" ? error : String(error)}</span>
           <button type="button" onClick={() => setError(null)} className="ml-auto underline shrink-0" aria-label="Dismiss">{t("common.refresh")}</button>
         </div>
       )}
@@ -353,8 +358,8 @@ export default function MarketIntel() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground text-sm"
                 >
                   <option value="">—</option>
-                  {countries.map((c) => (
-                    <option key={c.country_code} value={c.country_code}>{c.name} ({c.country_code})</option>
+                  {(countries ?? []).map((c) => (
+                    <option key={c?.country_code ?? ""} value={c?.country_code ?? ""}>{c?.name ?? ""} ({c?.country_code ?? ""})</option>
                   ))}
                 </select>
               </div>
@@ -381,19 +386,19 @@ export default function MarketIntel() {
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">{t("marketIntel.researchType")}</label>
-              {!(granularRequest.research_types?.length >= 1) && (
+              {!((granularRequest.research_types ?? []).length >= 1) && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">{t("marketIntel.selectAtLeastOneResearchType")}</p>
               )}
               <div className="flex flex-wrap gap-3">
-                {researchTypeOptions.map((opt) => (
-                  <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                {(researchTypeOptions ?? []).map((opt) => (
+                  <label key={opt?.value ?? ""} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={granularRequest.research_types.includes(opt.value)}
-                      onChange={() => toggleResearchType(opt.value)}
+                      checked={(granularRequest.research_types ?? []).includes(opt?.value)}
+                      onChange={() => toggleResearchType(opt?.value)}
                       className="rounded border-input"
                     />
-                    <span className="text-sm text-foreground">{opt.label}</span>
+                    <span className="text-sm text-foreground">{opt?.label ?? ""}</span>
                   </label>
                 ))}
               </div>
@@ -410,7 +415,7 @@ export default function MarketIntel() {
               <button
                 type="button"
                 onClick={handleViewSegmentedResults}
-                disabled={resultsLoading || !(granularRequest.research_types?.length >= 1)}
+                disabled={resultsLoading || !((granularRequest.research_types ?? []).length >= 1)}
                 className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50"
               >
                 <FileSearch className="w-4 h-4" />
@@ -463,6 +468,17 @@ export default function MarketIntel() {
                     </tbody>
                   </table>
                 </div>
+                {(segmentedResult.data_sources_used?.length ?? 0) > 0 && (
+                  <div className="mt-4 p-3 rounded-lg border border-border bg-muted/20">
+                    <h4 className="text-sm font-semibold text-foreground mb-1">{t("marketIntel.dataSourcesUsed")}</h4>
+                    <p className="text-xs text-muted-foreground mb-2">{t("marketIntel.dataSourcesUsedDesc")}</p>
+                    <ul className="flex flex-wrap gap-2 text-xs text-foreground">
+                      {segmentedResult.data_sources_used.map((src, idx) => (
+                        <li key={idx} className="px-2 py-1 rounded-md bg-card border border-border">{src}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -480,15 +496,15 @@ export default function MarketIntel() {
                 {t("marketIntel.tools")}
               </h3>
               <div className="space-y-2">
-                {(tools.length ? tools : []).map((tool) => (
+                {(Array.isArray(tools) ? tools : []).map((tool, idx) => (
                   <div
-                    key={tool.id}
+                    key={tool?.id ?? `tool-${idx}`}
                     className="flex items-start gap-2 p-2 rounded-md bg-card border border-border"
                   >
                     <BarChart3 className="w-4 h-4 text-pillar1 shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-medium text-foreground text-sm">{tool.name}</div>
-                      <div className="text-xs text-muted-foreground">{tool.description}</div>
+                      <div className="font-medium text-foreground text-sm">{tool?.name ?? ""}</div>
+                      <div className="text-xs text-muted-foreground">{tool?.description ?? ""}</div>
                     </div>
                   </div>
                 ))}
@@ -502,14 +518,14 @@ export default function MarketIntel() {
                 {t("marketIntel.services")}
               </h3>
               <div className="space-y-2">
-                {(services.length ? services : []).map((svc) => (
+                {(Array.isArray(services) ? services : []).map((svc, idx) => (
                   <div
-                    key={svc.id}
+                    key={svc?.id ?? `svc-${idx}`}
                     className="flex items-center gap-2 p-2 rounded-md bg-card border border-border"
                   >
-                    <span className="text-pillar1 font-mono text-xs">{t("marketIntel.step")} {svc.step}</span>
-                    <span className="font-medium text-foreground text-sm">{svc.name}</span>
-                    <span className="text-xs text-muted-foreground truncate">{svc.description}</span>
+                    <span className="text-pillar1 font-mono text-xs">{t("marketIntel.step")} {svc?.step ?? ""}</span>
+                    <span className="font-medium text-foreground text-sm">{svc?.name ?? ""}</span>
+                    <span className="text-xs text-muted-foreground truncate">{svc?.description ?? ""}</span>
                   </div>
                 ))}
               </div>
@@ -522,13 +538,13 @@ export default function MarketIntel() {
                 {t("marketIntel.outputs")}
               </h3>
               <div className="space-y-2">
-                {(results.length ? results : []).map((r) => (
+                {(Array.isArray(results) ? results : []).map((r, idx) => (
                   <ResultBlock
-                    key={r.id}
-                    icon={r.id === "needs" ? ListOrdered : r.id === "complaints" ? AlertTriangle : ShoppingBag}
-                    title={r.title}
-                    sub={r.period}
-                    color={r.id === "needs" ? "pillar1" : r.id === "complaints" ? "accent" : "primary"}
+                    key={r?.id ?? `result-${idx}`}
+                    icon={r?.id === "needs" ? ListOrdered : r?.id === "complaints" ? AlertTriangle : ShoppingBag}
+                    title={r?.title ?? ""}
+                    sub={r?.period ?? ""}
+                    color={r?.id === "needs" ? "pillar1" : r?.id === "complaints" ? "accent" : "primary"}
                   />
                 ))}
               </div>
@@ -541,7 +557,7 @@ export default function MarketIntel() {
         {CATEGORY_ORDER.map((catId) => {
           const items = (sourcesList || []).filter((s) => s.category === catId);
           if (!items.length) return null;
-          const catLabel = (sourceCategories || []).find((c) => c.id === catId)?.label ?? t(`marketIntel.${CATEGORY_TKEY[catId]}`);
+          const catLabel = (sourceCategories || []).find((c) => c.id === catId)?.label ?? t(`marketIntel.${CATEGORY_TKEY[catId] ?? catId}`);
           return (
             <div key={catId} className="mb-6 last:mb-0">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">{catLabel}</h3>
@@ -562,12 +578,12 @@ export default function MarketIntel() {
                     <div className="text-sm text-muted-foreground">{src.description}</div>
                     {src.purpose && <div className="text-xs text-muted-foreground">{t("marketIntel.purpose")}: {src.purpose}</div>}
                     <div className="flex flex-wrap gap-1.5 mt-1">
-                      {src.price_tier && (
+                      {src.price_tier && PRICE_TKEY[src.price_tier] && (
                         <span className="px-1.5 py-0.5 rounded text-xs bg-primary/20 text-primary">
                           {t(`marketIntel.${PRICE_TKEY[src.price_tier]}`)}
                         </span>
                       )}
-                      {src.type && (
+                      {src.type && TYPE_TKEY[src.type] && (
                         <span className="px-1.5 py-0.5 rounded text-xs bg-muted text-muted-foreground">
                           {t(`marketIntel.${TYPE_TKEY[src.type]}`)}
                         </span>
@@ -622,17 +638,19 @@ export default function MarketIntel() {
             {t("marketIntel.country")}: <strong>{currentCountryCode}</strong> · {t("marketIntel.newsSummarySubtitle")}
           </p>
           <div className="space-y-3">
-            {(newsItems || []).map((item, i) => (
+            {(Array.isArray(newsItems) ? newsItems : []).map((item, i) => (
               <div key={i} className="p-3 rounded-lg border border-border bg-muted/20">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="font-medium text-foreground">{item.title}</span>
-                  <span className="px-1.5 py-0.5 rounded text-xs bg-accent/20 text-accent">
-                    {t(`marketIntel.${item.b2b_b2c}`)}
-                  </span>
-                  {item.date && <span className="text-xs text-muted-foreground">{item.date}</span>}
+                  <span className="font-medium text-foreground">{item?.title ?? ""}</span>
+                  {item?.b2b_b2c && (
+                    <span className="px-1.5 py-0.5 rounded text-xs bg-accent/20 text-accent">
+                      {typeof t === "function" ? t(`marketIntel.${item.b2b_b2c}`) : item.b2b_b2c}
+                    </span>
+                  )}
+                  {item?.date && <span className="text-xs text-muted-foreground">{String(item.date)}</span>}
                 </div>
-                <p className="text-sm text-muted-foreground">{item.summary}</p>
-                <p className="text-xs text-muted-foreground mt-1">{t("marketIntel.contactSource")}: {item.source}</p>
+                <p className="text-sm text-muted-foreground">{item?.summary ?? ""}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t("marketIntel.contactSource")}: {item?.source ?? ""}</p>
               </div>
             ))}
           </div>
@@ -698,7 +716,7 @@ export default function MarketIntel() {
                 onChange={(e) => setReportOptions((p) => ({ ...p, report_tier: e.target.value }))}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground text-sm"
               >
-                {(reportTierOptions.length ? reportTierOptions : [{ value: "medium", label: t("marketIntel.reportTierMedium") }, { value: "high", label: t("marketIntel.reportTierHigh") }, { value: "highest", label: t("marketIntel.reportTierHighest") }]).map((o) => (
+                {(Array.isArray(reportTierOptions) && reportTierOptions.length ? reportTierOptions : [{ value: "medium", label: t("marketIntel.reportTierMedium") }, { value: "high", label: t("marketIntel.reportTierHigh") }, { value: "highest", label: t("marketIntel.reportTierHighest") }]).map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
@@ -740,15 +758,15 @@ export default function MarketIntel() {
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">{t("marketIntel.reportSections")}</label>
             <div className="space-y-2 max-h-48 overflow-y-auto rounded-md border border-border p-3 bg-muted/30">
-              {(reportMeta.sections.length ? reportMeta.sections : []).map((sec) => (
-                <label key={sec.id} className="flex items-center gap-2 cursor-pointer">
+              {(Array.isArray(reportMeta.sections) ? reportMeta.sections : []).map((sec) => (
+                <label key={sec?.id ?? ""} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={reportOptions.sections.includes(sec.id)}
-                    onChange={() => toggleSection(sec.id)}
+                    checked={(reportOptions.sections ?? []).includes(sec?.id)}
+                    onChange={() => toggleSection(sec?.id)}
                     className="rounded border-input"
                   />
-                  <span className="text-sm text-foreground">{sec.label}</span>
+                  <span className="text-sm text-foreground">{sec?.label ?? ""}</span>
                 </label>
               ))}
             </div>
@@ -766,14 +784,15 @@ const resultColors = {
 };
 
 function ResultBlock({ icon: Icon, title, sub, color }) {
+  const SafeIcon = Icon && typeof Icon === "function" ? Icon : BarChart3;
   return (
     <div className="p-4 rounded-lg border border-border bg-muted/30 flex items-start gap-3">
       <div className={`p-2 rounded-md shrink-0 ${resultColors[color] ?? resultColors.primary}`}>
-        <Icon className="w-5 h-5" />
+        <SafeIcon className="w-5 h-5" />
       </div>
       <div>
-        <div className="font-medium text-foreground">{title}</div>
-        <div className="text-sm text-muted-foreground">{sub}</div>
+        <div className="font-medium text-foreground">{title != null ? String(title) : ""}</div>
+        <div className="text-sm text-muted-foreground">{sub != null ? String(sub) : ""}</div>
       </div>
     </div>
   );

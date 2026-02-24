@@ -11,6 +11,17 @@ export interface CountryMaster {
   region?: string;
 }
 
+/** B2B 무역용 국가/지역 메타: 결제 선호, 대표 산업, 물류 난이도, FTA 등 */
+export interface CountryB2BMetadata {
+  country_code: string;
+  region: string;
+  payment_preference: string;
+  key_industries: string[];
+  logistics_difficulty: "low" | "medium" | "high";
+  fta_with_kr?: boolean;
+  note?: string;
+}
+
 export interface OrganizationMarket {
   id: string;
   organization_id: string;

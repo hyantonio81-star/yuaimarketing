@@ -99,18 +99,18 @@ export default function CompetitorTracking() {
           competitorsApi.getIndustryOptions(lang),
         ]);
         if (!cancelled) {
-          setCompetitors(listRes?.competitors ?? []);
-          setEvents(eventsRes?.events ?? []);
-          setReports(reportsRes?.reports ?? []);
-          setAlertSettings(settingsRes?.settings ?? null);
-          setIndustryOptions(industryRes?.options ?? []);
-          const profile = profileRes?.profile;
+          setCompetitors(Array.isArray(listRes?.competitors) ? listRes.competitors : []);
+          setEvents(Array.isArray(eventsRes?.events) ? eventsRes.events : []);
+          setReports(Array.isArray(reportsRes?.reports) ? reportsRes.reports : []);
+          setAlertSettings(settingsRes?.settings != null && typeof settingsRes.settings === "object" ? settingsRes.settings : null);
+          setIndustryOptions(Array.isArray(industryRes?.options) ? industryRes.options : []);
+          const profile = profileRes?.profile != null && typeof profileRes.profile === "object" ? profileRes.profile : null;
           if (profile) {
             setTrackingProfile(profile);
-            setSelectedIndustries(profile.industries ?? []);
-            const pf = profile.product_focus?.length ? profile.product_focus : ["", ""];
+            setSelectedIndustries(Array.isArray(profile.industries) ? profile.industries : []);
+            const pf = Array.isArray(profile.product_focus) && profile.product_focus.length ? profile.product_focus : ["", ""];
             setProductFocus(pf.length >= 2 ? pf : [pf[0] ?? "", pf[1] ?? ""]);
-            setAdditionalCountries(profile.additional_countries ?? []);
+            setAdditionalCountries(Array.isArray(profile.additional_countries) ? profile.additional_countries : []);
             setShowOtherCountries((profile.additional_countries?.length ?? 0) > 0);
           } else {
             setSelectedIndustries([]);
@@ -119,7 +119,10 @@ export default function CompetitorTracking() {
           }
         }
       } catch (e) {
-        if (!cancelled) setError(e?.response?.data?.error || e?.message || t("competitorTracking.saveFailed"));
+        if (!cancelled) {
+          const raw = e?.apiMessage ?? e?.response?.data?.error ?? e?.response?.data?.message ?? e?.message;
+          setError(typeof raw === "string" ? raw : (typeof t === "function" ? t("competitorTracking.loadFailed") : "Load failed"));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -142,11 +145,12 @@ export default function CompetitorTracking() {
     setError(null);
     try {
       const res = await competitorsApi.addCompetitor(orgId, country, { name: newName.trim(), url: newUrl.trim() || undefined });
-      setCompetitors((prev) => [...prev, res.competitor]);
+      if (res?.competitor != null) setCompetitors((prev) => [...(Array.isArray(prev) ? prev : []), res.competitor]);
       setNewName("");
       setNewUrl("");
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("competitorTracking.saveFailed"));
+      const msg = e?.response?.data?.error ?? e?.message;
+      setError(typeof msg === "string" ? msg : (typeof t === "function" ? t("competitorTracking.saveFailed") : "Save failed"));
     }
     setAdding(false);
   };
@@ -155,9 +159,10 @@ export default function CompetitorTracking() {
     setError(null);
     try {
       await competitorsApi.deleteCompetitor(orgId, country, id);
-      setCompetitors((prev) => prev.filter((c) => c.id !== id));
+      setCompetitors((prev) => (Array.isArray(prev) ? prev : []).filter((c) => c?.id !== id));
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("competitorTracking.saveFailed"));
+      const msg = e?.response?.data?.error ?? e?.message;
+      setError(typeof msg === "string" ? msg : (typeof t === "function" ? t("competitorTracking.saveFailed") : "Save failed"));
     }
   };
 
@@ -171,7 +176,8 @@ export default function CompetitorTracking() {
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 2000);
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("competitorTracking.saveFailed"));
+      const msg = e?.response?.data?.error ?? e?.message;
+      setError(typeof msg === "string" ? msg : (typeof t === "function" ? t("competitorTracking.saveFailed") : "Save failed"));
     }
     setSavingSettings(false);
   };
@@ -181,23 +187,26 @@ export default function CompetitorTracking() {
     setError(null);
     try {
       const report = await competitorsApi.generateReport(orgId, country, reportSchedule);
-      setReports((prev) => [report, ...prev]);
+      if (report != null) setReports((prev) => [report, ...(Array.isArray(prev) ? prev : [])]);
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("competitorTracking.saveFailed"));
+      const msg = e?.response?.data?.error ?? e?.message;
+      setError(typeof msg === "string" ? msg : (typeof t === "function" ? t("competitorTracking.saveFailed") : "Save failed"));
     }
     setReportGenLoading(false);
   };
 
   const toggleAdditionalCountry = (code) => {
-    setAdditionalCountries((prev) =>
-      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
-    );
+    setAdditionalCountries((prev) => {
+      const list = prev ?? [];
+      return list.includes(code) ? list.filter((c) => c !== code) : [...list, code];
+    });
   };
 
   const toggleIndustry = (id) => {
-    setSelectedIndustries((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setSelectedIndustries((prev) => {
+      const list = prev ?? [];
+      return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+    });
   };
 
   const handleSaveProfile = async () => {
@@ -205,33 +214,35 @@ export default function CompetitorTracking() {
     setError(null);
     try {
       const res = await competitorsApi.setTrackingProfile(orgId, country, {
-        industries: selectedIndustries,
-        product_focus: productFocus.filter((p) => p.trim()),
-        additional_countries: additionalCountries,
+        industries: Array.isArray(selectedIndustries) ? selectedIndustries : [],
+        product_focus: (Array.isArray(productFocus) ? productFocus : []).filter((p) => p != null && String(p).trim()),
+        additional_countries: Array.isArray(additionalCountries) ? additionalCountries : [],
       });
       setTrackingProfile(res.profile);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2000);
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("competitorTracking.saveFailed"));
+      const msg = e?.response?.data?.error ?? e?.message;
+      setError(typeof msg === "string" ? msg : (typeof t === "function" ? t("competitorTracking.saveFailed") : "Save failed"));
     }
     setSavingProfile(false);
   };
 
   const setProductAt = (index, value) => {
     setProductFocus((prev) => {
-      const next = [...prev];
+      const list = Array.isArray(prev) ? prev : [];
+      const next = [...list];
       next[index] = value;
       return next;
     });
   };
 
   const addProductSlot = () => {
-    setProductFocus((prev) => [...prev, ""]);
+    setProductFocus((prev) => [...(Array.isArray(prev) ? prev : []), ""]);
   };
 
   const removeProductSlot = (index) => {
-    setProductFocus((prev) => prev.filter((_, i) => i !== index));
+    setProductFocus((prev) => (Array.isArray(prev) ? prev : []).filter((_, i) => i !== index));
   };
 
   const formatDate = (iso) => {
@@ -271,21 +282,21 @@ export default function CompetitorTracking() {
             <span className="text-sm text-foreground">{t("competitorTracking.selectOtherCountries")}</span>
           </label>
         </div>
-        {showOtherCountries && countriesList.length > 0 && (
+        {showOtherCountries && (Array.isArray(countriesList) ? countriesList : []).length > 0 && (
           <div className="mt-3 p-3 rounded-lg border border-border bg-muted/20">
             <p className="text-xs text-muted-foreground mb-2">{t("competitorTracking.additionalCountriesHint")}</p>
             <div className="flex flex-wrap gap-2">
-              {countriesList
-                .filter((c) => c.country_code !== country)
+              {(Array.isArray(countriesList) ? countriesList : [])
+                .filter((c) => c?.country_code != null && c.country_code !== country)
                 .map((c) => (
-                  <label key={c.country_code} className="flex items-center gap-1.5 cursor-pointer px-2 py-1 rounded bg-background border border-border">
+                  <label key={c?.country_code ?? ""} className="flex items-center gap-1.5 cursor-pointer px-2 py-1 rounded bg-background border border-border">
                     <input
                       type="checkbox"
-                      checked={additionalCountries.includes(c.country_code)}
-                      onChange={() => toggleAdditionalCountry(c.country_code)}
+                      checked={(additionalCountries ?? []).includes(c?.country_code)}
+                      onChange={() => toggleAdditionalCountry(c?.country_code)}
                       className="rounded border-input"
                     />
-                    <span className="text-sm">{c.name ?? c.country_code}</span>
+                    <span className="text-sm">{c?.name ?? c?.country_code ?? ""}</span>
                   </label>
                 ))}
             </div>
@@ -293,10 +304,10 @@ export default function CompetitorTracking() {
         )}
       </header>
 
-      {error && (
+      {error != null && error !== "" && (
         <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-center gap-2" role="alert">
           <AlertTriangle className="w-5 h-5 shrink-0" />
-          <span>{error}</span>
+          <span>{typeof error === "string" ? error : String(error)}</span>
           <button type="button" onClick={() => setError(null)} className="ml-auto underline shrink-0">{t("common.refresh")}</button>
         </div>
       )}
@@ -308,15 +319,15 @@ export default function CompetitorTracking() {
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">{t("competitorTracking.industrySector")}</label>
             <div className="flex flex-wrap gap-3">
-              {(industryOptions.length ? industryOptions : []).map((opt) => (
-                <label key={opt.id} className="flex items-center gap-2 cursor-pointer">
+              {(Array.isArray(industryOptions) ? industryOptions : []).map((opt) => (
+                <label key={opt?.id ?? ""} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={selectedIndustries.includes(opt.id)}
-                    onChange={() => toggleIndustry(opt.id)}
+                    checked={(selectedIndustries ?? []).includes(opt?.id)}
+                    onChange={() => toggleIndustry(opt?.id)}
                     className="rounded border-input"
                   />
-                  <span className="text-sm text-foreground">{opt.label}</span>
+                  <span className="text-sm text-foreground">{opt?.label ?? ""}</span>
                 </label>
               ))}
             </div>
@@ -324,7 +335,7 @@ export default function CompetitorTracking() {
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">{t("competitorTracking.productFocus")}</label>
             <div className="space-y-2">
-              {productFocus.map((value, index) => (
+              {(Array.isArray(productFocus) ? productFocus : []).map((value, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <input
                     type="text"
@@ -333,7 +344,7 @@ export default function CompetitorTracking() {
                     placeholder={t("competitorTracking.productPlaceholder")}
                     className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-foreground text-sm max-w-xs"
                   />
-                  {productFocus.length > 2 && (
+                  {(Array.isArray(productFocus) ? productFocus : []).length > 2 && (
                     <button type="button" onClick={() => removeProductSlot(index)} className="text-destructive hover:opacity-80 p-1" aria-label={t("competitorTracking.deleteCompetitor")}>
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -362,14 +373,14 @@ export default function CompetitorTracking() {
       {country && country !== "ALL" && (
         <SectionCard title={t("competitorTracking.marketIntelSummaryTitle")} className="mb-6">
           <p className="text-sm text-muted-foreground mb-3">{t("competitorTracking.marketIntelSummaryHint")}</p>
-          {marketIntelNews.length === 0 ? (
+          {(Array.isArray(marketIntelNews) ? marketIntelNews : []).length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
           ) : (
             <ul className="space-y-2 mb-3">
-              {marketIntelNews.slice(0, 3).map((item, i) => (
+              {(Array.isArray(marketIntelNews) ? marketIntelNews : []).slice(0, 3).map((item, i) => (
                 <li key={i} className="p-2 rounded-md bg-muted/30 border border-border">
-                  <span className="font-medium text-foreground text-sm">{item.title}</span>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.summary}</p>
+                  <span className="font-medium text-foreground text-sm">{item?.title ?? ""}</span>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item?.summary ?? ""}</p>
                 </li>
               ))}
             </ul>
@@ -399,12 +410,12 @@ export default function CompetitorTracking() {
                     </tr>
                   </thead>
                   <tbody>
-                    {competitors.map((c) => (
-                      <tr key={c.id} className="border-b border-border last:border-0">
-                        <td className="p-2 font-medium">{c.name}</td>
-                        <td className="p-2 text-muted-foreground">{c.url ? <a href={c.url} target="_blank" rel="noreferrer noopener" className="text-primary hover:underline truncate max-w-[200px] inline-block">{c.url}</a> : "—"}</td>
+                    {(Array.isArray(competitors) ? competitors : []).map((c) => (
+                      <tr key={c?.id ?? ""} className="border-b border-border last:border-0">
+                        <td className="p-2 font-medium">{c?.name ?? ""}</td>
+                        <td className="p-2 text-muted-foreground">{c?.url ? <a href={c.url} target="_blank" rel="noreferrer noopener" className="text-primary hover:underline truncate max-w-[200px] inline-block">{c.url}</a> : "—"}</td>
                         <td className="p-2">
-                          <button type="button" onClick={() => handleDeleteCompetitor(c.id)} className="text-destructive hover:opacity-80 p-1" aria-label={t("competitorTracking.deleteCompetitor")}>
+                          <button type="button" onClick={() => handleDeleteCompetitor(c?.id)} className="text-destructive hover:opacity-80 p-1" aria-label={t("competitorTracking.deleteCompetitor")}>
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </td>
@@ -446,18 +457,18 @@ export default function CompetitorTracking() {
           <p className="text-sm text-muted-foreground">{t("competitorTracking.recentAlertsEmpty")}</p>
         ) : (
           <ul className="space-y-3">
-            {events.map((ev) => (
-              <li key={ev.id} className="p-3 rounded-lg border border-border bg-muted/20 flex flex-col sm:flex-row sm:items-start gap-2">
+            {(Array.isArray(events) ? events : []).map((ev) => (
+              <li key={ev?.id ?? ""} className="p-3 rounded-lg border border-border bg-muted/20 flex flex-col sm:flex-row sm:items-start gap-2">
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-muted-foreground">{formatDate(ev.occurred_at)}</span>
+                  <span className="text-xs text-muted-foreground">{formatDate(ev?.occurred_at)}</span>
                   <span className="px-1.5 py-0.5 rounded text-xs bg-pillar2/20 text-pillar2">
-                    {t(`competitorTracking.${EVENT_TYPE_KEYS[ev.type] || "eventTypeWebsite"}`)}
+                    {typeof t === "function" ? t(`competitorTracking.${EVENT_TYPE_KEYS[ev?.type] || "eventTypeWebsite"}`) : ev?.type ?? ""}
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-medium text-foreground">{ev.competitor_name} — {ev.title}</div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{ev.summary}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{ev.source}</p>
+                  <div className="font-medium text-foreground">{ev?.competitor_name ?? ""} — {ev?.title ?? ""}</div>
+                  <p className="text-sm text-muted-foreground mt-0.5">{ev?.summary ?? ""}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{ev?.source ?? ""}</p>
                 </div>
               </li>
             ))}
@@ -475,14 +486,14 @@ export default function CompetitorTracking() {
               <p className="text-sm text-muted-foreground mb-4">{t("competitorTracking.weeklyReportsEmpty")}</p>
             ) : (
               <ul className="space-y-2 mb-4">
-                {reports.map((r) => (
-                  <li key={r.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30 border border-border">
-                    <span className="text-sm font-medium">{r.period}</span>
+                {(Array.isArray(reports) ? reports : []).map((r) => (
+                  <li key={r?.id ?? ""} className="flex items-center justify-between p-2 rounded-md bg-muted/30 border border-border">
+                    <span className="text-sm font-medium">{r?.period ?? ""}</span>
                     <span className="text-xs px-1.5 py-0.5 rounded bg-pillar2/20 text-pillar2 mr-2">
-                      {r.schedule === "monthly" ? t("competitorTracking.reportMonthly") : r.schedule === "weekly" ? t("competitorTracking.reportWeekly") : t("competitorTracking.reportOnce")}
+                      {r?.schedule === "monthly" ? t("competitorTracking.reportMonthly") : r?.schedule === "weekly" ? t("competitorTracking.reportWeekly") : t("competitorTracking.reportOnce")}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {r.status === "pending" ? t("competitorTracking.reportPending") : r.generated_at?.slice(0, 10)}
+                      {r?.status === "pending" ? t("competitorTracking.reportPending") : (r?.generated_at != null ? String(r.generated_at).slice(0, 10) : "")}
                     </span>
                   </li>
                 ))}
@@ -527,8 +538,8 @@ export default function CompetitorTracking() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={alertSettings.instant_alerts_email}
-                    onChange={(e) => setAlertSettings((s) => ({ ...s, instant_alerts_email: e.target.checked }))}
+                    checked={!!alertSettings?.instant_alerts_email}
+                    onChange={(e) => setAlertSettings((s) => ({ ...(s || {}), instant_alerts_email: e.target.checked }))}
                     className="rounded border-input"
                   />
                   <span className="text-sm">{t("competitorTracking.email")}</span>
@@ -536,8 +547,8 @@ export default function CompetitorTracking() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={alertSettings.instant_alerts_slack}
-                    onChange={(e) => setAlertSettings((s) => ({ ...s, instant_alerts_slack: e.target.checked }))}
+                    checked={!!alertSettings?.instant_alerts_slack}
+                    onChange={(e) => setAlertSettings((s) => ({ ...(s || {}), instant_alerts_slack: e.target.checked }))}
                     className="rounded border-input"
                   />
                   <span className="text-sm">{t("competitorTracking.slack")}</span>
@@ -545,8 +556,8 @@ export default function CompetitorTracking() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={alertSettings.instant_alerts_whatsapp}
-                    onChange={(e) => setAlertSettings((s) => ({ ...s, instant_alerts_whatsapp: e.target.checked }))}
+                    checked={!!alertSettings?.instant_alerts_whatsapp}
+                    onChange={(e) => setAlertSettings((s) => ({ ...(s || {}), instant_alerts_whatsapp: e.target.checked }))}
                     className="rounded border-input"
                   />
                   <span className="text-sm">{t("competitorTracking.whatsapp")}</span>
@@ -558,8 +569,8 @@ export default function CompetitorTracking() {
               <label className="flex items-center gap-2 cursor-pointer mb-2">
                 <input
                   type="checkbox"
-                  checked={alertSettings.weekly_report_enabled}
-                  onChange={(e) => setAlertSettings((s) => ({ ...s, weekly_report_enabled: e.target.checked }))}
+                  checked={!!alertSettings?.weekly_report_enabled}
+                  onChange={(e) => setAlertSettings((s) => ({ ...(s || {}), weekly_report_enabled: e.target.checked }))}
                   className="rounded border-input"
                 />
                 <span className="text-sm">{t("competitorTracking.weeklyReportChannel")}</span>
@@ -569,11 +580,11 @@ export default function CompetitorTracking() {
                   <label key={ch} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={(alertSettings.weekly_report_channels ?? []).includes(ch)}
+                      checked={(Array.isArray(alertSettings?.weekly_report_channels) ? alertSettings.weekly_report_channels : []).includes(ch)}
                       onChange={(e) => {
-                        const channels = alertSettings.weekly_report_channels ?? [];
+                        const channels = Array.isArray(alertSettings?.weekly_report_channels) ? alertSettings.weekly_report_channels : [];
                         const next = e.target.checked ? [...channels, ch] : channels.filter((c) => c !== ch);
-                        setAlertSettings((s) => ({ ...s, weekly_report_channels: next.length ? next : ["email"] }));
+                        setAlertSettings((s) => ({ ...(s || {}), weekly_report_channels: next.length ? next : ["email"] }));
                       }}
                       className="rounded border-input"
                     />
@@ -598,15 +609,18 @@ export default function CompetitorTracking() {
       {/* 자동 추적 (기능 소개) */}
       <SectionCard title={t("competitorTracking.autoTrackingTitle")} className="mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {AUTO_TRACKING.map(({ tKey, tool, icon: Icon }) => (
-            <div key={tKey} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border">
-              <Icon className="w-5 h-5 text-pillar2 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-foreground">{t(`competitorTracking.${tKey}`)}</div>
-                <div className="text-sm text-muted-foreground font-mono">{tool}</div>
+          {(Array.isArray(AUTO_TRACKING) ? AUTO_TRACKING : []).map(({ tKey, tool, icon: Icon }) => {
+            const SafeIcon = Icon && typeof Icon === "function" ? Icon : Globe;
+            return (
+              <div key={tKey ?? ""} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+                <SafeIcon className="w-5 h-5 text-pillar2 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-medium text-foreground">{typeof t === "function" ? t(`competitorTracking.${tKey}`) : tKey}</div>
+                  <div className="text-sm text-muted-foreground font-mono">{tool ?? ""}</div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </SectionCard>
 
@@ -626,17 +640,20 @@ export default function CompetitorTracking() {
       {/* 알림 채널 (기능 소개) */}
       <SectionCard title={t("competitorTracking.alertsTitle")}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {ALERTS_CAPABILITY.map(({ labelKey, channelKey, icon: Icon }) => (
-            <div key={labelKey} className="flex items-center gap-4 p-4 rounded-lg border border-border bg-muted/30">
-              <div className="p-2 rounded-md bg-accent/20 text-accent">
-                <Icon className="w-5 h-5" />
+          {(Array.isArray(ALERTS_CAPABILITY) ? ALERTS_CAPABILITY : []).map(({ labelKey, channelKey, icon: Icon }) => {
+            const SafeIcon = Icon && typeof Icon === "function" ? Icon : Bell;
+            return (
+              <div key={labelKey ?? ""} className="flex items-center gap-4 p-4 rounded-lg border border-border bg-muted/30">
+                <div className="p-2 rounded-md bg-accent/20 text-accent">
+                  <SafeIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-medium text-foreground">{typeof t === "function" ? t(`competitorTracking.${labelKey}`) : labelKey}</div>
+                  <div className="text-sm text-muted-foreground">{typeof t === "function" ? t(`competitorTracking.${channelKey}`) : channelKey}</div>
+                </div>
               </div>
-              <div>
-                <div className="font-medium text-foreground">{t(`competitorTracking.${labelKey}`)}</div>
-                <div className="text-sm text-muted-foreground">{t(`competitorTracking.${channelKey}`)}</div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </SectionCard>
     </div>

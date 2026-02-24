@@ -125,7 +125,8 @@ function analyzeVolumeTrend(reviews: Review[]): ReviewVolumeTrend {
   return { direction, change_pct: changePct, period: "최근 30일" };
 }
 
-export function analyzeReviews(product: ProductForReview): ReviewAnalysisResult {
+/** @param _orgId scope for future channel-specific reviews */
+export function analyzeReviews(product: ProductForReview, _orgId?: string, _countryCode?: string): ReviewAnalysisResult {
   const reviews = collectReviewsAllChannels(product);
 
   const sentiment_dist = { positive: 0, neutral: 0, negative: 0 };
