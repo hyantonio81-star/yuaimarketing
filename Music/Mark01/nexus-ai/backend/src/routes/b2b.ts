@@ -96,7 +96,7 @@ export async function b2bRoutes(app: FastifyInstance) {
   }>("/marketing-strategy", async (req) => {
     const body = req.body ?? {};
     const target = body.target === "B2C" ? "B2C" : "B2B";
-    const goal: "awareness" | "lead" | "revenue" = ["awareness", "lead", "revenue"].includes(String(body.goal)) ? (body.goal as "awareness" | "lead" | "revenue") : "lead";
+    const goal = (["awareness", "lead", "revenue"].includes(String(body.goal)) ? body.goal : "lead") as "awareness" | "lead" | "revenue";
     return generateMarketingStrategy({
       product: sanitizeItemOrProduct(body.product, 200),
       target,
@@ -156,12 +156,14 @@ export async function b2bRoutes(app: FastifyInstance) {
     const body = req.body ?? {};
     const items = Array.isArray(body.items) ? body.items.slice(0, 50).map((x) => sanitizeShortString(x, 200)) : undefined;
     const country = body.country ? sanitizeCountryCode(body.country) ?? undefined : undefined;
+    const quantity = typeof body.quantity === "number" ? body.quantity : sanitizeNumber(body.quantity, 0, 0, 1e6);
+    const budget = typeof body.budget === "number" ? body.budget : sanitizeNumber(body.budget, 0, 0, 1e9);
     return evaluateTender({
       document: sanitizeShortString(body.document, 5000),
       items,
-      quantity: typeof body.quantity === "number" ? body.quantity : sanitizeNumber(body.quantity, 0, 0, 1e6),
+      quantity,
       delivery_terms: sanitizeShortString(body.delivery_terms, 500),
-      budget: typeof body.budget === "number" ? body.budget : sanitizeNumber(body.budget, 0, 0, 1e9),
+      budget,
       country,
       payment: sanitizeShortString(body.payment, 200),
       penalty_clause: sanitizeShortString(body.penalty_clause, 1000),

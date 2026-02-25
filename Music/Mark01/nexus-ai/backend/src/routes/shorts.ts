@@ -42,13 +42,13 @@ export async function shortsRoutes(app: FastifyInstance) {
     const frontendOrigin = (process.env.FRONTEND_ORIGIN ?? "http://localhost:5173").trim();
     const redirectTo = `${frontendOrigin}/shorts?youtube=connected`;
     if (!code) {
-      return reply.redirect(`${frontendOrigin}/shorts?youtube=error&message=code_required`, 302);
+      return reply.status(302).redirect(`${frontendOrigin}/shorts?youtube=error&message=code_required`);
     }
     const result = await exchangeCodeAndStore(code, "default");
     if (!result.ok) {
-      return reply.redirect(`${frontendOrigin}/shorts?youtube=error&message=${encodeURIComponent(result.error ?? "exchange_failed")}`, 302);
+      return reply.status(302).redirect(`${frontendOrigin}/shorts?youtube=error&message=${encodeURIComponent(result.error ?? "exchange_failed")}`);
     }
-    return reply.redirect(redirectTo, 302);
+    return reply.status(302).redirect(redirectTo);
   });
 
   /** YouTube 연동 상태 */

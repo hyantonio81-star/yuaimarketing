@@ -144,7 +144,7 @@ export async function uploadVideo(
       "Content-Type": `multipart/related; boundary=${boundary}`,
       "Content-Length": String(body.length),
     },
-    body: new Uint8Array(body) as unknown as BodyInit,
+    body: new Uint8Array(body) as BodyInit,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { error: data.error?.message || data.error?.errors?.[0]?.message || "Upload failed" };
