@@ -135,16 +135,17 @@ export async function uploadVideo(
     categoryId: "22",
     tags: ["shorts", "short"],
   };
-  const body: Buffer = buildMultipartBody(boundary, snippet, fileBuffer);
+  const bodyBuffer: Buffer = buildMultipartBody(boundary, snippet, fileBuffer);
+  const bodyInit = new Uint8Array(bodyBuffer) as unknown as BodyInit;
 
   const res = await fetch(`${UPLOAD_URL}?part=snippet,status&uploadType=multipart`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": `multipart/related; boundary=${boundary}`,
-      "Content-Length": String(body.length),
+      "Content-Length": String(bodyBuffer.length),
     },
-    body: new Uint8Array(body) as unknown as BodyInit,
+    body: bodyInit,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { error: data.error?.message || data.error?.errors?.[0]?.message || "Upload failed" };

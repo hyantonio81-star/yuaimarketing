@@ -160,7 +160,7 @@ export async function b2bRoutes(app: FastifyInstance) {
     const country = body.country ? sanitizeCountryCode(body.country) ?? undefined : undefined;
     const quantity: number = typeof body.quantity === "number" ? body.quantity : sanitizeNumber(body.quantity, 0, 0, 1e6);
     const budgetNum: number = typeof body.budget === "number" ? body.budget : sanitizeNumber(body.budget, 0, 0, 1e9);
-    return evaluateTender({
+    const tenderInput: TenderInput = {
       document: sanitizeShortString(body.document, 5000),
       items,
       quantity,
@@ -170,7 +170,8 @@ export async function b2bRoutes(app: FastifyInstance) {
       payment: sanitizeShortString(body.payment, 200),
       penalty_clause: sanitizeShortString(body.penalty_clause, 1000),
       title: sanitizeShortString(body.title, 200),
-    });
+    };
+    return evaluateTender(tenderInput);
   });
 
   app.get<{
