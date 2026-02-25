@@ -46,11 +46,18 @@
    - 값 입력: **`Music/Mark01/nexus-ai`**  
    - **Save**
 
-3. **재배포**  
-   - **Deployments** 탭 → 최신 배포 오른쪽 **⋯** → **Redeploy**  
-   - 또는 새 커밋 푸시로 자동 재배포
+3. **Node.js Version (Production Overrides 경고 해소)**  
+   - **Settings** → **Build and Deployment** → **Node.js Version**  
+   - **20.x** 선택 후 **Save**  
+   - "Configuration Settings in the current Production deployment differ from your current Project Settings" 경고는 이렇게 맞추고 **Redeploy** 하면 사라집니다.  
+   - 또는 터미널에서: `VERCEL_TOKEN=토큰 npm run vercel:set-root` 실행 시 Root Directory와 함께 Node 20.x가 API로 설정됩니다.
 
-4. **빌드 확인**  
+4. **재배포**  
+   - **Deployments** 탭 → 최신 배포 오른쪽 **⋯** → **Redeploy**  
+   - 또는 새 커밋 푸시로 자동 재배포  
+   - **Node.js Version을 바꾼 경우 반드시 새 배포가 필요합니다.**
+
+5. **빌드 확인**  
    - 재배포 시 **Building** 로그에서  
      - `npm run build` (backend + frontend) 실행  
      - `backend/dist` 생성  
@@ -73,7 +80,7 @@
 
 ---
 
-## 5. API로 Root Directory 한 번에 설정 (선택)
+## 5. API로 Root Directory + Node 20.x 한 번에 설정 (선택)
 
 토큰이 있으면 터미널에서 한 번에 설정할 수 있습니다.
 

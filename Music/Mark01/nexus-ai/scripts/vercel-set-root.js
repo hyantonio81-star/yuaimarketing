@@ -41,7 +41,8 @@ async function main() {
   console.log("  Root Directory:", data.rootDirectory ?? ROOT_DIRECTORY);
   console.log("  Build Command:", data.buildCommand ?? body.buildCommand);
   console.log("  Output Directory:", data.outputDirectory ?? body.outputDirectory);
-  console.log("이제 Vercel에서 해당 브랜치를 Redeploy 하세요.");
+  console.log("  Node.js Version:", data.nodeVersion ?? body.nodeVersion);
+  console.log("이제 Vercel에서 Redeploy 하세요. (새 배포 시 설정이 반영됩니다.)");
 }
 
 main();
