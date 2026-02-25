@@ -106,6 +106,7 @@ export const translations = {
     },
     market: {
       label: "시장(국가)",
+      countryList: "나라 리스트",
       selectCountry: "국가 선택",
     },
     register: {
@@ -803,6 +804,7 @@ export const translations = {
     },
     market: {
       label: "Market (Country)",
+      countryList: "Country list",
       selectCountry: "Select country",
     },
     register: {
@@ -1500,6 +1502,7 @@ export const translations = {
     },
     market: {
       label: "Mercado (país)",
+      countryList: "Lista de países",
       selectCountry: "Seleccionar país",
     },
     register: {

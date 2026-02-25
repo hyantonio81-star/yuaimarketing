@@ -73,14 +73,14 @@ export default function Layout() {
           ))}
         </nav>
         <div className="p-2 border-t border-border space-y-2">
-          {!marketLoading && countries.length > 0 && (
-            <div className="px-2 py-1">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                <MapPin className="w-3.5 h-3.5" />
-                <span>{t("market.label")}</span>
-              </div>
+          <div className="px-2 py-1">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <MapPin className="w-3.5 h-3.5" />
+              <span>{t("market.countryList")}</span>
+            </div>
+            {!marketLoading && countries.length > 0 ? (
               <select
-                value={currentCountryCode}
+                value={currentCountryCode || countries[0]?.country_code}
                 onChange={(e) => setCountry(e.target.value)}
                 className="w-full mt-0.5 px-2 py-1.5 rounded text-xs bg-background border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 aria-label={t("market.selectCountry")}
@@ -91,8 +91,10 @@ export default function Layout() {
                   </option>
                 ))}
               </select>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-muted-foreground mt-0.5 py-1">{t("common.loading")}</p>
+            )}
+          </div>
           {user && (
             <div className="px-2 py-1">
               <p className="text-xs text-muted-foreground truncate" title={user.email}>
