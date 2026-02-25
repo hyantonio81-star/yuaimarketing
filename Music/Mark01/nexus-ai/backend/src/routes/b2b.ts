@@ -96,7 +96,7 @@ export async function b2bRoutes(app: FastifyInstance) {
   }>("/marketing-strategy", async (req) => {
     const body = req.body ?? {};
     const target = body.target === "B2C" ? "B2C" : "B2B";
-    const goal = ["awareness", "lead", "revenue"].includes(String(body.goal)) ? body.goal : "lead";
+    const goal: "awareness" | "lead" | "revenue" = ["awareness", "lead", "revenue"].includes(String(body.goal)) ? (body.goal as "awareness" | "lead" | "revenue") : "lead";
     return generateMarketingStrategy({
       product: sanitizeItemOrProduct(body.product, 200),
       target,
@@ -161,7 +161,7 @@ export async function b2bRoutes(app: FastifyInstance) {
       items,
       quantity: typeof body.quantity === "number" ? body.quantity : sanitizeNumber(body.quantity, 0, 0, 1e6),
       delivery_terms: sanitizeShortString(body.delivery_terms, 500),
-      budget: sanitizeShortString(body.budget, 100),
+      budget: typeof body.budget === "number" ? body.budget : sanitizeNumber(body.budget, 0, 0, 1e9),
       country,
       payment: sanitizeShortString(body.payment, 200),
       penalty_clause: sanitizeShortString(body.penalty_clause, 1000),

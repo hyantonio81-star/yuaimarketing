@@ -16,6 +16,8 @@ Vercel 대시보드 → 프로젝트 **Settings** → **General** → **Root Dir
 
 **예시**
 
+- **현재 yuaimarketing 저장소** (프로젝트가 `Music/Mark01/nexus-ai/` 안에 있음):  
+  → Root Directory: **`Music/Mark01/nexus-ai`** ← 반드시 이 값으로 설정
 - 저장소 구조가 `리포지토리/nexus-ai/api/`, `nexus-ai/backend/`, `nexus-ai/frontend/` 이라면  
   → Root Directory: **`nexus-ai`**
 - 저장소 루트에 바로 `api/`, `backend/`, `frontend/` 가 있다면  

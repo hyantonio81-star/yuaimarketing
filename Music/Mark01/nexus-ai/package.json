@@ -10,7 +10,8 @@
     "dev:backend": "cd backend && npm run dev",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "build": "npm run build -w backend && npm run build -w frontend"
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "vercel:set-root": "node scripts/vercel-set-root.js"
   },
   "devDependencies": {
     "@vercel/node": "^3.2.0",

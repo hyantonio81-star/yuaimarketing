@@ -1,0 +1,10 @@
+Vercel Root Directory (필수)
+===========================
+
+이 프로젝트를 yuaimarketing.vercel.app 에 배포할 때
+Vercel 대시보드 → Settings → General → Root Directory 에서
+아래 값을 입력한 뒤 Save 하고 Redeploy 하세요.
+
+  Music/Mark01/nexus-ai
+
+설정 후 https://yuaimarketing.vercel.app/api/health 가 200 이면 정상입니다.
