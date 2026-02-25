@@ -5,6 +5,10 @@
   "type": "module",
   "engines": { "node": ">=18.x <=20.x" },
   "workspaces": ["frontend", "backend"],
+  "overrides": {
+    "tar": ">=6.2.2",
+    "glob": ">=10.4.5"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
     "dev:frontend": "cd frontend && npm run dev",
