@@ -6,7 +6,7 @@
 const PROJECT_ID = "prj_pSDwd60OjCnRlcw09ApsFfmXWJft";
 const GITHUB_ORG = "hyantonio81-star";
 const GITHUB_REPO = "yuaimarketing";
-const BRANCH = "master";
+const BRANCH = "main";
 
 const token = process.env.VERCEL_TOKEN;
 if (!token) {
