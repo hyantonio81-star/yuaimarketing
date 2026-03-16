@@ -1,6 +1,6 @@
-## NEXUS AI Monorepo
+## YuantO Ai Monorepo
 
-This is the monorepo for **NEXUS AI**, containing:
+This is the monorepo for **YuantO Ai**, containing:
 
 - `frontend` – React + Vite + Tailwind CSS + shadcn/ui
 - `backend` – Node.js + Fastify + TypeScript

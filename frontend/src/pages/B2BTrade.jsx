@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   TrendingUp,
   BarChart3,
@@ -22,99 +23,164 @@ import {
   Brain,
   MessageSquare,
   ClipboardList,
+  ExternalLink,
 } from "lucide-react";
 import SectionCard from "../components/SectionCard";
 import { api } from "../lib/api";
+import { useLanguage } from "../context/LanguageContext.jsx";
 
 const SOURCES = [
-  { name: "Google Trends API", desc: "실시간 검색 트렌드", icon: TrendingUp },
-  { name: "Statista API", desc: "통계 데이터", icon: BarChart3 },
-  { name: "CB Insights", desc: "스타트업/투자 트렌드", icon: Rocket },
-  { name: "PitchBook", desc: "M&A, 펀딩 데이터", icon: Handshake },
-  { name: "UN Comtrade", desc: "무역 통계", icon: Globe },
-  { name: "World Bank Open Data", desc: "경제 지표", icon: Landmark },
+  { name: "Google Trends API", descKey: "sourceDescTrends", icon: TrendingUp },
+  { name: "Statista API", descKey: "sourceDescStats", icon: BarChart3 },
+  { name: "CB Insights", descKey: "sourceDescStartup", icon: Rocket },
+  { name: "PitchBook", descKey: "sourceDescMa", icon: Handshake },
+  { name: "UN Comtrade", descKey: "sourceDescTrade", icon: Globe },
+  { name: "World Bank Open Data", descKey: "sourceDescEconomic", icon: Landmark },
+];
+
+const TABS = [
+  { id: "market", key: "tabMarketIndices" },
+  { id: "marketing", key: "tabMarketingInsight" },
+  { id: "buyer", key: "tabBuyerMatching" },
+  { id: "tender", key: "tabTenderRfq" },
+  { id: "docs", key: "tabTradeDocs" },
+  { id: "leads", key: "tabLeadsMessage" },
 ];
 
 export default function B2BTrade() {
+  const { t } = useLanguage();
+  const [activeTab, setActiveTab] = useState("market");
+
   return (
     <div className="p-6 lg:p-8">
-      <header className="mb-8">
+      <header className="mb-6">
         <h1 className="text-2xl font-bold text-foreground tracking-tight">
-          Pillar 2 — B2B Trade
+          {t("b2bTrade.pillarTitle")}
         </h1>
         <p className="text-muted-foreground mt-1">
-          트렌드·경제 데이터 소스 및 수집/저장 (20%)
+          {t("b2bTrade.pillarSubtitle")}
         </p>
       </header>
 
-      <SectionCard title="소스 (Data Sources)" className="mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {SOURCES.map(({ name, desc, icon: Icon }) => (
-            <div
-              key={name}
-              className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border"
-            >
-              <Icon className="w-5 h-5 text-pillar2 shrink-0 mt-0.5" />
-              <div>
-                <div className="font-medium text-foreground">{name}</div>
-                <div className="text-sm text-muted-foreground">{desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </SectionCard>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <SectionCard title="수집 주기 (Collection Schedule)">
-          <div className="flex items-center gap-4 p-4 rounded-lg bg-pillar2/10 border border-pillar2/30">
-            <div className="p-2 rounded-md bg-pillar2/20 text-pillar2">
-              <Clock className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="font-semibold text-foreground">일일 1회</div>
-              <div className="text-muted-foreground">새벽 2시 (Asia/Seoul)</div>
-            </div>
-          </div>
-        </SectionCard>
-
-        <SectionCard title="저장 (Storage)">
-          <div className="flex items-center gap-4 p-4 rounded-lg bg-card border border-border">
-            <div className="p-2 rounded-md bg-primary/20 text-primary">
-              <Database className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="font-semibold text-foreground">
-                PostgreSQL + TimescaleDB
-              </div>
-              <div className="text-sm text-muted-foreground">시계열 (Time Series)</div>
-            </div>
-          </div>
-        </SectionCard>
+      <div className="flex flex-wrap gap-1 border-b border-border mb-6">
+        {TABS.map(({ id, key }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            className={`px-4 py-2.5 text-sm font-medium rounded-t-md transition-colors ${
+              activeTab === id
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            }`}
+          >
+            {t(`b2bTrade.${key}`)}
+          </button>
+        ))}
       </div>
 
-      <MarketScoreSection />
-      <MarketReportSection />
-      <MarketingStrategySection />
-      <IntegratedMarketingSection />
-      <CustomerInsightEngineSection />
-      <CustomerInsightReportSection />
-      <BrandMonitoringSection />
-      <BuyerHunterSection />
-      <BuyerMatchingSection />
-      <BuyerProfileSection />
-      <TenderRfqSection />
-      <TenderEvaluationSection />
-      <TenderChecklistSection />
-      <TradeDocumentSection />
-      <CommercialInvoiceSection />
-      <HsCodeClassifySection />
-      <ShippingQuotesSection />
-      <LandedCostSection />
+      {activeTab === "market" && (
+        <>
+          <SectionCard title={t("b2bTrade.sourcesTitle")} className="mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {SOURCES.map(({ name, descKey, icon: Icon }) => (
+                <div
+                  key={name}
+                  className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border"
+                >
+                  <Icon className="w-5 h-5 text-pillar2 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium text-foreground">{name}</div>
+                    <div className="text-sm text-muted-foreground">{t(`b2bTrade.${descKey}`)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <SectionCard title={t("b2bTrade.collectionSchedule")}>
+              <div className="flex items-center gap-4 p-4 rounded-lg bg-pillar2/10 border border-pillar2/30">
+                <div className="p-2 rounded-md bg-pillar2/20 text-pillar2">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="font-semibold text-foreground">{t("b2bTrade.dailyOnce")}</div>
+                  <div className="text-muted-foreground">{t("b2bTrade.scheduleTime")}</div>
+                </div>
+              </div>
+            </SectionCard>
+            <SectionCard title={t("b2bTrade.storage")}>
+              <div className="flex items-center gap-4 p-4 rounded-lg bg-card border border-border">
+                <div className="p-2 rounded-md bg-primary/20 text-primary">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="font-semibold text-foreground">
+                    PostgreSQL + TimescaleDB
+                  </div>
+                  <div className="text-sm text-muted-foreground">{t("b2bTrade.timeSeries")}</div>
+                </div>
+              </div>
+            </SectionCard>
+          </div>
+          <IndexViewerSection />
+          <MarketScoreSection />
+          <TradeMarketScoreSection />
+          <MarketReportSection />
+        </>
+      )}
+
+      {activeTab === "marketing" && (
+        <>
+          <MarketingStrategySection />
+          <IntegratedMarketingSection />
+          <CustomerInsightEngineSection />
+          <CustomerInsightReportSection />
+          <BrandMonitoringSection />
+        </>
+      )}
+
+      {activeTab === "buyer" && (
+        <>
+          <BuyerHunterSection />
+          <BuyerMatchingSection />
+          <BuyerProfileSection />
+        </>
+      )}
+
+      {activeTab === "tender" && (
+        <>
+          <TenderRfqSection />
+          <TenderEvaluationSection />
+          <TenderChecklistSection />
+        </>
+      )}
+
+      {activeTab === "docs" && (
+        <>
+          <TradeDocumentSection />
+          <CommercialInvoiceSection />
+          <HsCodeClassifySection />
+          <ShippingQuotesSection />
+          <LandedCostSection />
+        </>
+      )}
+
+      {activeTab === "leads" && (
+        <>
+          <LeadsSection />
+          <HotLeadSection />
+          <ProposalSection />
+          <MessageSection />
+          <PartnerVerificationSection />
+        </>
+      )}
     </div>
   );
 }
 
 function LandedCostSection() {
+  const { t } = useLanguage();
   const [fobValue, setFobValue] = useState("10000");
   const [freight, setFreight] = useState("850");
   const [hsCode, setHsCode] = useState("8541");
@@ -140,7 +206,7 @@ function LandedCostSection() {
       });
       setResult(data);
     } catch (e) {
-      setError(e.message || "랜딩 코스트 계산 실패");
+      setError(e.message || t("b2bTrade.landedCostError"));
       setResult(null);
     } finally {
       setLoading(false);
@@ -148,9 +214,9 @@ function LandedCostSection() {
   };
 
   return (
-    <SectionCard title="총 랜딩 코스트 (calculate_total_landed_cost)" className="mb-6">
+    <SectionCard title={t("b2bTrade.landedCostTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        product + freight + insurance(1%) + 관세 + VAT + 기타수수료 → effective_markup %
+        {t("b2bTrade.landedCostFormula")}
       </p>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[100px]">
@@ -174,7 +240,7 @@ function LandedCostSection() {
           <input type="text" value={destCountry} onChange={(e) => setDestCountry(e.target.value)} placeholder="US" className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground text-sm" />
         </div>
         <button type="button" onClick={handleCalculate} disabled={loading} className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-          {loading ? "계산 중…" : "랜딩 코스트 계산"}
+          {loading ? t("b2bTrade.calculating") : t("b2bTrade.landedCostCalculate")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -192,6 +258,9 @@ function LandedCostSection() {
             <span>VAT: ${result.breakdown?.vat}</span>
             <span>Other: ${result.breakdown?.other_fees}</span>
           </div>
+          {result.region_hint && (
+            <p className="text-xs text-muted-foreground border-t border-border pt-2 mt-2">{result.region_hint}</p>
+          )}
         </div>
       )}
     </SectionCard>
@@ -199,6 +268,7 @@ function LandedCostSection() {
 }
 
 function ShippingQuotesSection() {
+  const { t } = useLanguage();
   const [origin, setOrigin] = useState("KRICN");
   const [dest, setDest] = useState("USLAX");
   const [weight, setWeight] = useState("100");
@@ -222,7 +292,7 @@ function ShippingQuotesSection() {
       });
       setResult(data);
     } catch (e) {
-      setError(e.message || "견적 조회 실패");
+      setError(e.message || t("b2bTrade.quotesError"));
       setResult(null);
     } finally {
       setLoading(false);
@@ -230,7 +300,7 @@ function ShippingQuotesSection() {
   };
 
   return (
-    <SectionCard title="배송 견적 (get_shipping_quotes)" className="mb-6">
+    <SectionCard title={t("b2bTrade.shippingQuotesTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
         DHL, FedEx, UPS, Maersk, COSCO, Local Forwarders · cheapest / fastest / best_value
       </p>
@@ -256,7 +326,7 @@ function ShippingQuotesSection() {
           <input type="text" value={incoterm} onChange={(e) => setIncoterm(e.target.value)} placeholder="CIF" className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground text-sm" />
         </div>
         <button type="button" onClick={handleGetQuotes} disabled={loading} className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-          {loading ? "조회 중…" : "견적 조회"}
+          {loading ? t("b2bTrade.querying") : t("b2bTrade.getQuotes")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -310,6 +380,7 @@ function ShippingQuotesSection() {
 }
 
 function HsCodeClassifySection() {
+  const { t } = useLanguage();
   const [productDesc, setProductDesc] = useState("Solar panel 300W photovoltaic module");
   const [country, setCountry] = useState("US");
   const [result, setResult] = useState(null);
@@ -326,7 +397,7 @@ function HsCodeClassifySection() {
       });
       setResult(data);
     } catch (e) {
-      setError(e.message || "HS 코드 분류 실패");
+      setError(e.message || t("b2bTrade.hsCodeError"));
       setResult(null);
     } finally {
       setLoading(false);
@@ -334,13 +405,13 @@ function HsCodeClassifySection() {
   };
 
   return (
-    <SectionCard title="HS 코드 분류 (classify_hs_code)" className="mb-6">
+    <SectionCard title={t("b2bTrade.hsCodeTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        제품 설명으로 6자리 HS 코드 추천 · 검증 · 관세율(KR → 목적지)
+        {t("b2bTrade.hsCodeDesc")}
       </p>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[280px] flex-1">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">제품 설명</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.productDesc")}</label>
           <input
             type="text"
             value={productDesc}
@@ -351,7 +422,7 @@ function HsCodeClassifySection() {
           />
         </div>
         <div className="min-w-[80px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">목적지 국가</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.destCountry")}</label>
           <input
             type="text"
             value={country}
@@ -366,7 +437,7 @@ function HsCodeClassifySection() {
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {loading ? "분류 중…" : "HS 코드 추천"}
+          {loading ? t("b2bTrade.classifying") : t("b2bTrade.hsRecommend")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -398,6 +469,7 @@ function HsCodeClassifySection() {
 }
 
 function CommercialInvoiceSection() {
+  const { t } = useLanguage();
   const [buyerName, setBuyerName] = useState("ABC Trading Co.");
   const [buyerAddress, setBuyerAddress] = useState("Berlin, Germany");
   const [buyerContact, setBuyerContact] = useState("procurement@abc-trading.de");
@@ -428,7 +500,7 @@ function CommercialInvoiceSection() {
         setResult(data);
       }
     } catch (e) {
-      setError(e.message || "Commercial Invoice 생성 실패");
+      setError(e.message || t("b2bTrade.invoiceError"));
       setResult(null);
     } finally {
       setLoading(false);
@@ -445,9 +517,9 @@ function CommercialInvoiceSection() {
   };
 
   return (
-    <SectionCard title="Commercial Invoice 생성 (generate_commercial_invoice)" className="mb-6">
+    <SectionCard title={t("b2bTrade.invoiceTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        주문 정보로 데이터 채움 → 다국어(en, de, zh, es) DOCX/PDF 생성
+        {t("b2bTrade.invoiceDesc")}
       </p>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="space-y-2">
@@ -526,7 +598,7 @@ function CommercialInvoiceSection() {
         disabled={loading}
         className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
       >
-        {loading ? "생성 중…" : "Commercial Invoice 생성"}
+        {loading ? t("b2bTrade.generating") : t("b2bTrade.generateInvoice")}
       </button>
       {error && <p className="text-sm text-destructive mt-3">{error}</p>}
       {result && (
@@ -557,7 +629,7 @@ function CommercialInvoiceSection() {
           </div>
           <p className="text-muted-foreground">Subtotal: ${result.data?.subtotal?.toLocaleString()} · Shipping: ${result.data?.shipping} · Insurance: ${result.data?.insurance} · <strong>Total: ${result.data?.total?.toLocaleString()}</strong></p>
           <div>
-            <p className="text-muted-foreground mb-1">다국어 생성 파일</p>
+            <p className="text-muted-foreground mb-1">{t("b2bTrade.multilingualFile")}</p>
             <ul className="flex flex-wrap gap-2">
               {result.documents && Object.entries(result.documents).map(([lang, doc]) => (
                 <li key={lang} className="px-2 py-1 rounded bg-muted text-muted-foreground font-mono text-xs">{doc.filename}</li>
@@ -571,6 +643,7 @@ function CommercialInvoiceSection() {
 }
 
 function TenderChecklistSection() {
+  const { t } = useLanguage();
   const [tenderTitle, setTenderTitle] = useState("Solar Panel Procurement - Tanzania");
   const [deadline, setDeadline] = useState("2026-03-15");
   const [data, setData] = useState(null);
@@ -587,17 +660,17 @@ function TenderChecklistSection() {
       });
       setData(res);
     } catch (e) {
-      setError(e.message || "체크리스트 생성 실패");
+      setError(e.message || t("b2bTrade.checklistError"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SectionCard title="입찰 체크리스트 (자동 생성)" className="mb-6">
+    <SectionCard title={t("b2bTrade.checklistTitle")} className="mb-6">
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[240px] flex-1">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">Tender 제목</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.tenderTitle")}</label>
           <input
             type="text"
             value={tenderTitle}
@@ -607,7 +680,7 @@ function TenderChecklistSection() {
           />
         </div>
         <div className="min-w-[120px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">마감일</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.deadline")}</label>
           <input
             type="text"
             value={deadline}
@@ -622,7 +695,7 @@ function TenderChecklistSection() {
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {loading ? "생성 중…" : "체크리스트 생성"}
+          {loading ? t("b2bTrade.generating") : t("b2bTrade.generateChecklist")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -630,11 +703,11 @@ function TenderChecklistSection() {
         <div className="space-y-5 rounded-lg border border-border bg-muted/20 p-5 text-sm">
           <div>
             <h3 className="text-lg font-bold text-foreground">Tender: {data.tenderTitle}</h3>
-            <p className="text-muted-foreground">필수 서류 (마감: {data.deadline})</p>
+            <p className="text-muted-foreground">{t("b2bTrade.requiredDocs").replace("{deadline}", data.deadline || "")}</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-3 rounded-lg bg-primary/10 border border-primary/30">
-              <p className="font-medium text-primary mb-2">✅ 자동 준비 완료</p>
+              <p className="font-medium text-primary mb-2">✅ {t("b2bTrade.autoReady")}</p>
               <ul className="space-y-1">
                 {data.documents?.auto_ready?.map((d, i) => (
                   <li key={i} className="flex items-center gap-2">
@@ -644,7 +717,7 @@ function TenderChecklistSection() {
               </ul>
             </div>
             <div className="p-3 rounded-lg bg-accent/10 border border-accent/30">
-              <p className="font-medium text-accent mb-2">⚠️ 사용자 확인 필요</p>
+              <p className="font-medium text-accent mb-2">⚠️ {t("b2bTrade.userConfirm")}</p>
               <ul className="space-y-1">
                 {data.documents?.user_confirm?.map((d, i) => (
                   <li key={i} className="flex items-center gap-2">
@@ -654,7 +727,7 @@ function TenderChecklistSection() {
               </ul>
             </div>
             <div className="p-3 rounded-lg bg-muted border border-border">
-              <p className="font-medium text-destructive mb-2">❌ 전문가 필요</p>
+              <p className="font-medium text-destructive mb-2">❌ {t("b2bTrade.expertRequired")}</p>
               <ul className="space-y-1 text-muted-foreground">
                 {data.documents?.expert_required?.map((d, i) => (
                   <li key={i} className="flex items-center gap-2">
@@ -691,38 +764,39 @@ function TenderChecklistSection() {
 }
 
 function TradeDocumentSection() {
+  const { t } = useLanguage();
   const categories = [
     {
-      title: "1. 수출 서류",
+      title: t("b2bTrade.exportDocs"),
       items: [
         "Commercial Invoice",
         "Packing List",
         "Bill of Lading (B/L)",
-        "Certificate of Origin (원산지증명서)",
+        t("b2bTrade.certificateOrigin"),
         "Insurance Certificate",
       ],
     },
     {
-      title: "2. 인증서",
+      title: t("b2bTrade.certificates"),
       items: [
-        "ISO 9001 요약",
-        "CE 적합성 선언",
-        "시험 성적서",
+        t("b2bTrade.isoSummary"),
+        t("b2bTrade.ceDeclaration"),
+        t("b2bTrade.testReport"),
       ],
     },
     {
-      title: "3. 금융 서류",
+      title: t("b2bTrade.financialDocs"),
       items: [
         "Proforma Invoice",
-        "Letter of Credit (신용장) 초안",
+        t("b2bTrade.lcDraft"),
         "Payment Receipt",
       ],
     },
   ];
   return (
-    <SectionCard title="Module 2.3: 무역 서류 자동화 (4%) — Trade Document Generator" className="mb-6">
+    <SectionCard title={t("b2bTrade.tradeDocTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        자동 생성 가능 서류: 수출 서류, 인증서, 금융 서류
+        {t("b2bTrade.tradeDocDesc")}
       </p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {categories.map(({ title, items }) => (
@@ -741,6 +815,7 @@ function TradeDocumentSection() {
 }
 
 function TenderEvaluationSection() {
+  const { t } = useLanguage();
   const [budget, setBudget] = useState("100000");
   const [quantity, setQuantity] = useState("500");
   const [country, setCountry] = useState("US");
@@ -762,20 +837,20 @@ function TenderEvaluationSection() {
       });
       setResult(data);
     } catch (e) {
-      setError(e.message || "입찰 평가 실패");
+      setError(e.message || t("b2bTrade.evaluateError"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SectionCard title="입찰 평가 (evaluate_tender)" className="mb-6">
+    <SectionCard title={t("b2bTrade.evaluateTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        실행가능성(40) + 수익성(30) + 경쟁강도(15) + 리스크(15) = 100 · 60점 이상 시 BID 권장
+        {t("b2bTrade.evaluateDesc")}
       </p>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[100px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">예산 (USD)</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.budgetUsd")}</label>
           <input
             type="number"
             value={budget}
@@ -785,7 +860,7 @@ function TenderEvaluationSection() {
           />
         </div>
         <div className="min-w-[80px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">수량</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.quantity")}</label>
           <input
             type="number"
             value={quantity}
@@ -795,7 +870,7 @@ function TenderEvaluationSection() {
           />
         </div>
         <div className="min-w-[80px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">국가</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.country")}</label>
           <input
             type="text"
             value={country}
@@ -805,7 +880,7 @@ function TenderEvaluationSection() {
           />
         </div>
         <div className="min-w-[80px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">인도조건</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.incoterm")}</label>
           <input
             type="text"
             value={delivery}
@@ -820,27 +895,27 @@ function TenderEvaluationSection() {
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {loading ? "평가 중…" : "입찰 평가"}
+          {loading ? t("b2bTrade.evaluating") : t("b2bTrade.evaluateTender")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
       {result && (
         <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4 text-sm">
           <div className="flex flex-wrap items-center gap-4">
-            <span className="text-xl font-bold text-foreground">총점: {result.total_score}</span>
+            <span className="text-xl font-bold text-foreground">{t("b2bTrade.totalScore")}: {result.total_score}</span>
             <span className={`px-3 py-1 rounded font-medium ${result.recommendation === "BID" ? "bg-primary/20 text-primary" : "bg-accent/20 text-accent"}`}>
               {result.recommendation}
             </span>
-            <span className="text-muted-foreground">예상 낙찰 확률: {(result.estimated_win_probability * 100).toFixed(1)}%</span>
+            <span className="text-muted-foreground">{t("b2bTrade.winProbability")}: {(result.estimated_win_probability * 100).toFixed(1)}%</span>
           </div>
           <div className="flex flex-wrap gap-4">
-            <span className="text-muted-foreground">실행가능성: {result.breakdown?.feasibility}/40</span>
-            <span className="text-muted-foreground">수익성: {result.breakdown?.profitability}/30</span>
-            <span className="text-muted-foreground">경쟁강도: {result.breakdown?.competition}/15</span>
-            <span className="text-muted-foreground">리스크: {result.breakdown?.risk}/15</span>
+            <span className="text-muted-foreground">{t("b2bTrade.feasibility")}: {result.breakdown?.feasibility}/40</span>
+            <span className="text-muted-foreground">{t("b2bTrade.profitability")}: {result.breakdown?.profitability}/30</span>
+            <span className="text-muted-foreground">{t("b2bTrade.competition")}: {result.breakdown?.competition}/15</span>
+            <span className="text-muted-foreground">{t("b2bTrade.risk")}: {result.breakdown?.risk}/15</span>
           </div>
           {result.key_risks?.length > 0 && (
-            <p className="text-muted-foreground">키 리스크 점수: {result.key_risks.join(", ")}</p>
+            <p className="text-muted-foreground">{t("b2bTrade.keyRisks")}: {result.key_risks.join(", ")}</p>
           )}
         </div>
       )}
@@ -849,6 +924,7 @@ function TenderEvaluationSection() {
 }
 
 function BuyerProfileSection() {
+  const { t } = useLanguage();
   const [buyerId, setBuyerId] = useState("");
   const [companyName, setCompanyName] = useState("ABC");
   const [country, setCountry] = useState("DE");
@@ -870,7 +946,7 @@ function BuyerProfileSection() {
       });
       setProfile(data);
     } catch (e) {
-      setError(e.message || "프로필 조회 실패");
+      setError(e.message || t("b2bTrade.profileError"));
     } finally {
       setLoading(false);
     }
@@ -879,13 +955,13 @@ function BuyerProfileSection() {
   const stars = (n) => (n >= 85 ? "⭐⭐⭐⭐⭐" : n >= 70 ? "⭐⭐⭐⭐" : n >= 55 ? "⭐⭐⭐" : "⭐⭐");
 
   return (
-    <SectionCard title="Buyer Profile (바이어 상세 프로필)" className="mb-6">
+    <SectionCard title={t("b2bTrade.buyerProfileTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        바이어 ID(매칭 결과) 또는 회사명·국가로 상세 프로필·AI 전략·이메일 초안 조회
+        {t("b2bTrade.buyerProfileDesc")}
       </p>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[120px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">바이어 ID</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.buyerId")}</label>
           <input
             type="text"
             value={buyerId}
@@ -895,7 +971,7 @@ function BuyerProfileSection() {
           />
         </div>
         <div className="min-w-[140px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">회사명</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.companyName")}</label>
           <input
             type="text"
             value={companyName}
@@ -905,7 +981,7 @@ function BuyerProfileSection() {
           />
         </div>
         <div className="min-w-[80px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">국가</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.country")}</label>
           <input
             type="text"
             value={country}
@@ -920,7 +996,7 @@ function BuyerProfileSection() {
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          {loading ? "조회 중…" : "프로필 조회"}
+          {loading ? t("b2bTrade.querying") : t("b2bTrade.queryProfile")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -931,6 +1007,9 @@ function BuyerProfileSection() {
             <div className="mt-2 text-muted-foreground space-y-1">
               <p>회사명: {profile.companyName} · 국가: {profile.country} {profile.countryEmoji}</p>
               <p>설립: {profile.founded} (업력 {profile.yearsActive}년) · 직원: {profile.employees} · 웹사이트: {profile.website}</p>
+              {profile.paymentSuggestion && (
+                <p className="text-primary text-xs mt-1">💳 {profile.paymentSuggestion}</p>
+              )}
             </div>
           </div>
           <div>
@@ -980,7 +1059,7 @@ function TenderRfqSection() {
     { region: "아시아", items: ["KOTRA 입찰정보", "JETRO"] },
   ];
   return (
-    <SectionCard title="Module 2.2: 입찰 & RFQ 자동화 (6%) — Tender & RFQ Scout" className="mb-6">
+    <SectionCard title={t("b2bTrade.tenderRfqTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
         입찰 정보 자동 수집 · 사용자 키워드 + HS코드 필터 · 매일 오전 9시
       </p>
@@ -1014,23 +1093,31 @@ function TenderRfqSection() {
 function BuyerMatchingSection() {
   const [product, setProduct] = useState("8504");
   const [countries, setCountries] = useState("US,DE,JP,VN");
+  const [regions, setRegions] = useState("");
+  const [sector, setSector] = useState("");
   const [minScore, setMinScore] = useState("70");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [options, setOptions] = useState({ sectors: [], regions: [] });
+
+  useEffect(() => {
+    api.get("/b2b/options").then((r) => setOptions({ sectors: r.data?.sectors ?? [], regions: r.data?.regions ?? [] })).catch(() => {});
+  }, []);
 
   const handleMatch = async () => {
     setError(null);
     setResult(null);
     setLoading(true);
     try {
-      const { data } = await api.get("/b2b/match-buyers", {
-        params: {
-          product: product || "8504",
-          countries: countries || undefined,
-          min_score: minScore || "70",
-        },
-      });
+      const params = {
+        product: product || "8504",
+        countries: countries.trim() || undefined,
+        regions: regions.trim() || undefined,
+        sector: sector || undefined,
+        min_score: minScore || "70",
+      };
+      const { data } = await api.get("/b2b/match-buyers", { params });
       setResult(data);
     } catch (e) {
       setError(e.message || "바이어 매칭 실패");
@@ -1040,13 +1127,13 @@ function BuyerMatchingSection() {
   };
 
   return (
-    <SectionCard title="바이어 매칭 (match_buyers)" className="mb-6">
+    <SectionCard title={t("b2bTrade.buyerMatchingTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
-        제품매칭(35) + 거래규모(25) + 신뢰도(20) + 지역적합성(10) + 응답률예측(10) = 100 · import_volume_min $10K · 상위 50명
+        제품(30) + 규모(25) + 신뢰도(20) + 지역(15) + 응답(5) + 산업적합(5) = 100 · 지역/산업 필터 · 상위 50명
       </p>
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="min-w-[100px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">HS 코드 / 제품</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">HS 코드</label>
           <input
             type="text"
             value={product}
@@ -1055,13 +1142,36 @@ function BuyerMatchingSection() {
             className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
-        <div className="min-w-[180px]">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">대상 국가 (쉼표 구분)</label>
+        <div className="min-w-[120px]">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">산업 섹터</label>
+          <select
+            value={sector}
+            onChange={(e) => setSector(e.target.value)}
+            className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">전체</option>
+            {(options.sectors || []).map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-[160px]">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">대상 국가 (쉼표)</label>
           <input
             type="text"
             value={countries}
             onChange={(e) => setCountries(e.target.value)}
             placeholder="US,DE,JP"
+            className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div className="min-w-[140px]">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">지역 (국가 비우면 적용)</label>
+          <input
+            type="text"
+            value={regions}
+            onChange={(e) => setRegions(e.target.value)}
+            placeholder="Middle East,Europe"
             className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
@@ -1089,8 +1199,19 @@ function BuyerMatchingSection() {
       {result && (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            제품: {result.product} · min_score: {result.min_score} · 매칭 {result.buyers?.length}명
+            제품: {result.product} · min_score: {result.min_score}{result.sector ? ` · 섹터: ${result.sector}` : ""}
+            {result.real_buyer_count > 0 ? (
+              <> · <span className="text-primary">실데이터 {result.real_buyer_count}건</span> + 추천 {Math.max(0, (result.buyers?.length ?? 0) - result.real_buyer_count)}건</>
+            ) : (
+              <> · 매칭 {result.buyers?.length ?? 0}명</>
+            )}
           </p>
+          {result.real_buyer_count > 0 && (
+            <Link to="/market-intel" className="inline-flex items-center gap-2 text-xs text-primary hover:underline">
+              <ExternalLink className="w-3.5 h-3.5" />
+              시장 인텔에서 세분화·관련 업체 더 보기
+            </Link>
+          )}
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-left text-sm border-collapse">
               <thead>
@@ -1098,6 +1219,7 @@ function BuyerMatchingSection() {
                   <th className="p-2 font-medium text-muted-foreground">#</th>
                   <th className="p-2 font-medium text-muted-foreground">바이어</th>
                   <th className="p-2 font-medium text-muted-foreground">국가</th>
+                  <th className="p-2 font-medium text-muted-foreground">지역</th>
                   <th className="p-2 font-medium text-muted-foreground">연간 수입 (USD)</th>
                   <th className="p-2 font-medium text-muted-foreground">매칭 점수</th>
                   <th className="p-2 font-medium text-muted-foreground">세부</th>
@@ -1109,10 +1231,11 @@ function BuyerMatchingSection() {
                     <td className="p-2 font-mono">{i + 1}</td>
                     <td className="p-2">{b.name}</td>
                     <td className="p-2">{b.country}</td>
+                    <td className="p-2 text-muted-foreground">{b.region ?? "—"}</td>
                     <td className="p-2 font-mono">${b.annual_imports?.toLocaleString()}</td>
                     <td className="p-2 font-mono text-primary">{b.match_score}</td>
                     <td className="p-2 text-xs text-muted-foreground">
-                      P{b.score_breakdown?.product_match} V{b.score_breakdown?.volume} R{b.score_breakdown?.reputation} G{b.score_breakdown?.geo} Resp{b.score_breakdown?.response_prob}
+                      P{b.score_breakdown?.product_match} V{b.score_breakdown?.volume} R{b.score_breakdown?.reputation} G{b.score_breakdown?.geo} Resp{b.score_breakdown?.response_prob} S{b.score_breakdown?.sector_fit ?? 0}
                     </td>
                   </tr>
                 ))}
@@ -1126,6 +1249,7 @@ function BuyerMatchingSection() {
 }
 
 function CustomerInsightReportSection() {
+  const { language, t } = useLanguage();
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -1135,17 +1259,19 @@ function CustomerInsightReportSection() {
     setReport(null);
     setLoading(true);
     try {
-      const { data } = await api.get("/b2b/customer-insight-report");
+      const { data } = await api.get("/b2b/customer-insight-report", {
+        params: { lang: language || "ko" },
+      });
       setReport(data);
     } catch (e) {
-      setError(e.message || "리포트 생성 실패");
+      setError(e.message || t("common.reportError"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SectionCard title="고객 인사이트 리포트 (월간)" className="mb-6">
+    <SectionCard title={t("b2bTrade.customerInsightReportTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
         세그먼트 자동 발견 · 구매 여정 분석 · 이탈 예측 (ML)
       </p>
@@ -1155,7 +1281,7 @@ function CustomerInsightReportSection() {
         disabled={loading}
         className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 mb-4"
       >
-        {loading ? "생성 중…" : "월간 리포트 생성"}
+        {loading ? t("common.generating") : "월간 리포트 생성"}
       </button>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
       {report && (
@@ -1233,7 +1359,7 @@ function CustomerInsightReportSection() {
 
 function BrandMonitoringSection() {
   return (
-    <SectionCard title="Module 1.4: 브랜드 모니터링 & PR (5%) — Brand Reputation Manager" className="mb-6">
+    <SectionCard title={t("b2bTrade.brandMonitoringTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
         24/7 브랜드 모니터링 · 감정 분석 · 부정 멘션 알림 · 언론 보도 추적
       </p>
@@ -1276,7 +1402,7 @@ function BuyerHunterSection() {
     { title: "4. 전시회 & 무역 미션", items: ["참가 업체 리스트 크롤링", "KOTRA 무역관 정보"] },
   ];
   return (
-    <SectionCard title="Module 2.1: 글로벌 바이어 발굴 시스템 (8%) — International Buyer Hunter" className="mb-6">
+    <SectionCard title={t("b2bTrade.buyerHunterTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
         국제 무역 전문 모듈 · 바이어 데이터 소스 통합
       </p>
@@ -1296,8 +1422,178 @@ function BuyerHunterSection() {
   );
 }
 
+function IndexViewerSection() {
+  const { t } = useLanguage();
+  const [country, setCountry] = useState("");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const loadIndices = (countryParam) => {
+    setError(null);
+    setLoading(true);
+    api
+      .get("/b2b/indices", { params: countryParam ? { country: countryParam } : {} })
+      .then((r) => setData(r.data))
+      .catch((e) => setError(e.message || t("b2bTrade.indexError")))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadIndices("");
+  }, []);
+
+  const handleRefresh = () => loadIndices(country.trim() || undefined);
+  const trendBadge = (trend) => {
+    if (trend === "expansion") return <span className="text-primary font-medium">↑ 확장</span>;
+    if (trend === "contraction") return <span className="text-destructive font-medium">↓ 위축</span>;
+    return <span className="text-muted-foreground">→ 보합</span>;
+  };
+  const changeBadge = (pct) => {
+    const n = Number(pct);
+    if (n > 0) return <span className="text-primary text-sm">+{n}%</span>;
+    if (n < 0) return <span className="text-destructive text-sm">{n}%</span>;
+    return <span className="text-muted-foreground text-sm">0%</span>;
+  };
+
+  return (
+    <SectionCard title={t("b2bTrade.indexViewerTitle")} className="mb-6">
+      <p className="text-sm text-muted-foreground mb-4">
+        {t("b2bTrade.indexViewerDesc")}
+      </p>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="min-w-[120px]">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.indexCountryFilter")}</label>
+          <input
+            type="text"
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            placeholder="US, DE (비우면 전체)"
+            className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground text-sm"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 mt-6"
+        >
+          <TrendingUp className="w-4 h-4" />
+          {loading ? t("b2bTrade.loading") : t("b2bTrade.indexRefresh")}
+        </button>
+      </div>
+      {error && <p className="text-sm text-destructive mb-4">{error}</p>}
+      {data && (
+        <div className="space-y-6">
+          <p className="text-xs text-muted-foreground">{t("b2bTrade.asOf")}: {data.as_of}</p>
+
+          <div>
+            <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-pillar2" />
+              {t("b2bTrade.indexPmi")}
+            </h4>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="p-2 font-medium text-muted-foreground">{t("b2bTrade.country")}</th>
+                    <th className="p-2 font-medium text-muted-foreground">{t("b2bTrade.indexManufacturing")}</th>
+                    <th className="p-2 font-medium text-muted-foreground">{t("b2bTrade.indexServices")}</th>
+                    <th className="p-2 font-medium text-muted-foreground">{t("b2bTrade.indexTrend")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.pmi || []).map((p) => (
+                    <tr key={p.country_code} className="border-b border-border/50">
+                      <td className="p-2">{p.country_name}</td>
+                      <td className="p-2 font-mono">{p.manufacturing}</td>
+                      <td className="p-2 font-mono">{p.services}</td>
+                      <td className="p-2">{trendBadge(p.trend)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-pillar2" />
+              {t("b2bTrade.indexFreight")}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(data.freight || []).map((f) => (
+                <div key={f.id} className="p-3 rounded-lg border border-border bg-muted/20">
+                  <div className="font-medium text-foreground">{f.name}</div>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-lg font-mono text-primary">{f.value}</span>
+                    <span className="text-muted-foreground text-xs">{f.unit}</span>
+                    {changeBadge(f.change_pct)}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{f.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-pillar2" />
+              {t("b2bTrade.indexCommodity")}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {(data.commodity || []).map((c) => (
+                <div key={c.id} className="p-3 rounded-lg border border-border bg-muted/20">
+                  <div className="font-medium text-foreground">{c.name}</div>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="font-mono text-primary">{c.value}</span>
+                    <span className="text-muted-foreground text-xs">{c.unit}</span>
+                    {changeBadge(c.change_pct)}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{c.sector_hint}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+              <Landmark className="w-4 h-4 text-pillar2" />
+              {t("b2bTrade.indexEconomic")}
+            </h4>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="p-2 font-medium text-muted-foreground">{t("b2bTrade.country")}</th>
+                    <th className="p-2 font-medium text-muted-foreground">GDP YoY %</th>
+                    <th className="p-2 font-medium text-muted-foreground">{t("b2bTrade.indexTradeBalance")}</th>
+                    <th className="p-2 font-medium text-muted-foreground">{t("b2bTrade.note")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.economic_summary || []).map((e) => (
+                    <tr key={e.country_code} className="border-b border-border/50">
+                      <td className="p-2">{e.country_name}</td>
+                      <td className="p-2 font-mono">{e.gdp_growth_yoy != null ? `${e.gdp_growth_yoy}%` : "—"}</td>
+                      <td className="p-2 font-mono">{e.trade_balance_billion != null ? `$${e.trade_balance_billion}B` : "—"}</td>
+                      <td className="p-2 text-muted-foreground text-xs">{e.note ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
 function MarketScoreSection() {
   const [item, setItem] = useState("");
+  const [country, setCountry] = useState("");
+  const [hsCode, setHsCode] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -1307,9 +1603,10 @@ function MarketScoreSection() {
     setResult(null);
     setLoading(true);
     try {
-      const { data } = await api.get("/b2b/market-score", {
-        params: { item: item || "default" },
-      });
+      const params = { item: item || "default" };
+      if (country.trim()) params.country = country.trim();
+      if (hsCode.trim()) params.hs_code = hsCode.trim();
+      const { data } = await api.get("/b2b/market-score", { params });
       setResult(data);
     } catch (e) {
       setError(e.message || "점수 계산 실패");
@@ -1319,19 +1616,42 @@ function MarketScoreSection() {
   };
 
   return (
-    <SectionCard title="시장성 점수 (Market Score, 0-100)" className="mb-6">
+    <SectionCard title={t("b2bTrade.marketScoreTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
         시장 규모·성장률(25) + 경쟁강도(20) + 진입장벽(15) + 수익성(25) + 트렌드모멘텀(15) = 100
       </p>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <input
-          type="text"
-          value={item}
-          onChange={(e) => setItem(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleCalculate()}
-          placeholder="산업/키워드 (예: SaaS, 헬스케어)"
-          className="flex-1 min-w-[200px] rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-        />
+      <div className="flex flex-wrap items-end gap-3 mb-4">
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">산업/키워드 또는 HS코드</label>
+          <input
+            type="text"
+            value={item}
+            onChange={(e) => setItem(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleCalculate()}
+            placeholder="산업/키워드 (예: SaaS, 헬스케어) 또는 8504"
+            className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div className="min-w-[100px]">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">국가 (실데이터 시)</label>
+          <input
+            type="text"
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            placeholder="US"
+            className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div className="min-w-[80px]">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">HS (선택)</label>
+          <input
+            type="text"
+            value={hsCode}
+            onChange={(e) => setHsCode(e.target.value)}
+            placeholder="8504"
+            className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
         <button
           type="button"
           onClick={handleCalculate}
@@ -1347,6 +1667,12 @@ function MarketScoreSection() {
       )}
       {result && (
         <div className="space-y-4">
+          {result.data_source_note && (
+            <p className="text-xs text-primary flex items-center gap-1">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              {result.data_source_note}
+            </p>
+          )}
           <div className="flex items-center gap-4 p-4 rounded-lg bg-pillar2/10 border border-pillar2/30">
             <Target className="w-8 h-8 text-pillar2" />
             <div>
@@ -1376,6 +1702,147 @@ function MarketScoreSection() {
               </div>
             ))}
           </div>
+          <Link
+            to="/market-intel"
+            className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+          >
+            <ExternalLink className="w-4 h-4" />
+            무역·세분화 실데이터 더 보기 (시장 인텔)
+          </Link>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function TradeMarketScoreSection() {
+  const { t } = useLanguage();
+  const [origin, setOrigin] = useState("KR");
+  const [destination, setDestination] = useState("US");
+  const [itemOrHs, setItemOrHs] = useState("8504");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [countries, setCountries] = useState([]);
+
+  useEffect(() => {
+    api.get("/markets/countries").then((r) => setCountries(r.data?.countries ?? [])).catch(() => setCountries([]));
+  }, []);
+
+  const handleCalculate = async () => {
+    setError(null);
+    setResult(null);
+    setLoading(true);
+    try {
+      const { data } = await api.get("/b2b/trade-market-score", {
+        params: {
+          origin: origin || "KR",
+          destination: destination || "US",
+          item: (itemOrHs || "").trim() || "8504",
+        },
+      });
+      setResult(data);
+    } catch (e) {
+      setError(e.message || t("b2bTrade.tradeScoreError"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const categoryLabel = (cat) => {
+    const map = {
+      fta_tariff: t("b2bTrade.tradeScoreFta"),
+      demand_fit: t("b2bTrade.tradeScoreDemand"),
+      logistics: t("b2bTrade.tradeScoreLogistics"),
+      sector_fit: t("b2bTrade.tradeScoreSector"),
+      regulation_entry: t("b2bTrade.tradeScoreRegulation"),
+    };
+    return map[cat] ?? cat;
+  };
+
+  return (
+    <SectionCard title={t("b2bTrade.tradeMarketScoreTitle")} className="mb-6">
+      <p className="text-sm text-muted-foreground mb-4">
+        {t("b2bTrade.tradeMarketScoreDesc")}
+      </p>
+      <div className="flex flex-wrap items-end gap-3 mb-4">
+        <div className="min-w-[140px]">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.tradeScoreOrigin")}</label>
+          <select
+            value={origin}
+            onChange={(e) => setOrigin(e.target.value)}
+            className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground text-sm"
+          >
+            {(countries.length ? countries : [{ country_code: "KR", name: "한국" }, { country_code: "US", name: "미국" }, { country_code: "DE", name: "독일" }, { country_code: "JP", name: "일본" }, { country_code: "CN", name: "중국" }]).map((c) => (
+              <option key={c.country_code} value={c.country_code}>{c.name ?? c.country_code}</option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-[140px]">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.tradeScoreDestination")}</label>
+          <select
+            value={destination}
+            onChange={(e) => setDestination(e.target.value)}
+            className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground text-sm"
+          >
+            {(countries.length ? countries : [{ country_code: "KR", name: "한국" }, { country_code: "US", name: "미국" }, { country_code: "DE", name: "독일" }, { country_code: "JP", name: "일본" }, { country_code: "CN", name: "중국" }]).map((c) => (
+              <option key={c.country_code} value={c.country_code}>{c.name ?? c.country_code}</option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-[200px] flex-1">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.tradeScoreItemHs")}</label>
+          <input
+            type="text"
+            value={itemOrHs}
+            onChange={(e) => setItemOrHs(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleCalculate()}
+            placeholder="8504 또는 품목명"
+            className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-foreground text-sm"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleCalculate}
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+        >
+          <Calculator className="w-4 h-4" />
+          {loading ? t("b2bTrade.loading") : t("b2bTrade.tradeScoreCalculate")}
+        </button>
+      </div>
+      {error && <p className="text-sm text-destructive mb-4">{error}</p>}
+      {result && (
+        <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="text-2xl font-bold font-mono text-primary">{result.total_score}</span>
+            <span className="text-muted-foreground">/ 100</span>
+            <span className="text-sm text-muted-foreground">
+              {result.origin_country} → {result.destination_country} · {result.item_or_hs}
+              {result.sector ? ` (${result.sector})` : ""}
+            </span>
+            <span className={`px-2 py-1 rounded text-xs font-medium ${
+              result.recommendation === "recommended" ? "bg-primary/20 text-primary" :
+              result.recommendation === "cautious" ? "bg-destructive/20 text-destructive" : "bg-muted text-muted-foreground"
+            }`}>
+              {result.recommendation === "recommended" ? t("b2bTrade.tradeScoreRecYes") : result.recommendation === "cautious" ? t("b2bTrade.tradeScoreRecCautious") : t("b2bTrade.tradeScoreRecNeutral")}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {(result.breakdown || []).map((b) => (
+              <div key={b.category} className="p-3 rounded-lg border border-border bg-card">
+                <div className="flex justify-between items-start gap-2">
+                  <span className="text-sm font-medium text-foreground">{categoryLabel(b.category)}</span>
+                  <span className="text-sm font-mono text-pillar2">{b.score} / {b.max_points}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{b.detail}</p>
+              </div>
+            ))}
+          </div>
+          <div className="p-3 rounded-lg border border-primary/30 bg-primary/5">
+            <h4 className="text-sm font-semibold text-foreground mb-1">{t("b2bTrade.tradeScoreReview")}</h4>
+            <p className="text-sm text-foreground leading-relaxed">{result.review}</p>
+          </div>
         </div>
       )}
     </SectionCard>
@@ -1383,6 +1850,7 @@ function MarketScoreSection() {
 }
 
 function MarketReportSection() {
+  const { language, t } = useLanguage();
   const [productName, setProductName] = useState("");
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1394,18 +1862,18 @@ function MarketReportSection() {
     setLoading(true);
     try {
       const { data } = await api.get("/b2b/market-report", {
-        params: { item: productName || "제품명" },
+        params: { item: productName || "제품명", lang: language || "ko" },
       });
       setReport(data);
     } catch (e) {
-      setError(e.message || "리포트 생성 실패");
+      setError(e.message || t("common.reportError"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SectionCard title="시장성 평가 리포트 (Market Assessment Report)" className="mb-6">
+    <SectionCard title={t("b2bTrade.marketReportTitle")} className="mb-6">
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
           type="text"
@@ -1422,7 +1890,7 @@ function MarketReportSection() {
           className="inline-flex items-center gap-2 rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           <FileText className="w-4 h-4" />
-          {loading ? "생성 중…" : "리포트 생성"}
+          {loading ? t("common.generating") : t("common.reportGenerate")}
         </button>
       </div>
       {error && <p className="text-sm text-destructive mb-4">{error}</p>}
@@ -1551,7 +2019,7 @@ function MarketingStrategySection() {
   };
 
   return (
-    <SectionCard title="Module 1.2: AI 마케팅 전략 플래너 (10%) — Campaign Strategy Architect" className="mb-6">
+    <SectionCard title={t("b2bTrade.marketingStrategyTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
         제품/서비스, 타겟(B2B/B2C), 예산, 목표(인지도/리드/매출)를 입력하면 자동 마케팅 전략을 제안합니다.
       </p>
@@ -1676,7 +2144,7 @@ function IntegratedMarketingSection() {
   };
 
   return (
-    <SectionCard title="통합 마케팅 전략 (Integrated Marketing Strategy)" className="mb-6">
+    <SectionCard title={t("b2bTrade.integratedMarketingTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4">
         제품명, 예산, 기간을 입력하면 페르소나·채널별 전략·KPI·AI 에셋을 포함한 통합 전략을 생성합니다.
       </p>
@@ -1841,6 +2309,7 @@ function IntegratedMarketingSection() {
 }
 
 function CustomerInsightEngineSection() {
+  const { t } = useLanguage();
   const blocks = [
     {
       title: "1. 웹 분석",
@@ -1881,7 +2350,7 @@ function CustomerInsightEngineSection() {
   ];
 
   return (
-    <SectionCard title="Module 1.3: 고객 인사이트 엔진 (10%) — Customer Behavior Analyzer" className="mb-6">
+    <SectionCard title={t("b2bTrade.customerInsightEngineTitle")} className="mb-6">
       <p className="text-sm text-muted-foreground mb-4 flex items-center gap-2">
         <Brain className="w-4 h-4 text-pillar2" />
         데이터 소스 통합: 웹 분석, CRM, 소셜 리스닝, 설문조사를 통합해 고객 행동 인사이트 생성
@@ -1904,6 +2373,326 @@ function CustomerInsightEngineSection() {
           </div>
         ))}
       </div>
+    </SectionCard>
+  );
+}
+
+function LeadsSection() {
+  const { t } = useLanguage();
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterCountry, setFilterCountry] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    const params = {};
+    if (filterCountry) params.country = filterCountry;
+    if (filterStatus) params.status = filterStatus;
+    api.get("/b2b/leads", { params })
+      .then((r) => setLeads(r.data?.leads ?? r.data ?? []))
+      .catch(() => setLeads([]))
+      .finally(() => setLoading(false));
+  }, [filterCountry, filterStatus]);
+
+  return (
+    <SectionCard title={t("b2bTrade.leadsTitle")} className="mb-6">
+      <div className="flex flex-wrap gap-3 mb-4">
+        <input
+          type="text"
+          placeholder={t("b2bTrade.leadFilterCountry")}
+          value={filterCountry}
+          onChange={(e) => setFilterCountry(e.target.value)}
+          className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm w-24"
+        />
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm"
+        >
+          <option value="">{t("b2bTrade.leadFilterStatus")}</option>
+          <option value="new">new</option>
+          <option value="contacted">contacted</option>
+          <option value="qualified">qualified</option>
+          <option value="transferred">transferred</option>
+          <option value="closed">closed</option>
+        </select>
+      </div>
+      {loading ? (
+        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+      ) : Array.isArray(leads) && leads.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left border-collapse">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="py-2 pr-4 font-medium text-muted-foreground">{t("b2bTrade.leadId")}</th>
+                <th className="py-2 pr-4 font-medium text-muted-foreground">{t("b2bTrade.leadProduct")}</th>
+                <th className="py-2 pr-4 font-medium text-muted-foreground">{t("b2bTrade.leadCountry")}</th>
+                <th className="py-2 pr-4 font-medium text-muted-foreground">{t("b2bTrade.leadStatus")}</th>
+                <th className="py-2 pr-4 font-medium text-muted-foreground">{t("b2bTrade.leadSource")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leads.slice(0, 20).map((lead) => (
+                <tr key={lead.id} className="border-b border-border/50">
+                  <td className="py-2 pr-4 font-mono text-xs">{lead.id}</td>
+                  <td className="py-2 pr-4">{lead.product_or_hs ?? "—"}</td>
+                  <td className="py-2 pr-4">{lead.country ?? "—"}</td>
+                  <td className="py-2 pr-4">{lead.status ?? "—"}</td>
+                  <td className="py-2 pr-4">{lead.source ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">{t("b2bTrade.noLeads")}</p>
+      )}
+    </SectionCard>
+  );
+}
+
+function HotLeadSection() {
+  const { t } = useLanguage();
+  const [origin, setOrigin] = useState("KR");
+  const [destination, setDestination] = useState("US");
+  const [productOrHs, setProductOrHs] = useState("");
+  const [candidates, setCandidates] = useState([]);
+  const [created, setCreated] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const fetchCandidates = () => {
+    setLoading(true);
+    const params = { origin, destination };
+    if (productOrHs.trim()) params.product_or_hs = productOrHs.trim();
+    api.get("/b2b/hot-leads/candidates", { params })
+      .then((r) => setCandidates(r.data?.candidates ?? []))
+      .catch(() => setCandidates([]))
+      .finally(() => setLoading(false));
+  };
+
+  const createHotLeads = () => {
+    setCreating(true);
+    api.post("/b2b/hot-leads", { origin, destination, product_or_hs: productOrHs.trim() || undefined, count: 5 })
+      .then((r) => setCreated(r.data))
+      .catch(() => setCreated(null))
+      .finally(() => setCreating(false));
+  };
+
+  return (
+    <SectionCard title={t("b2bTrade.hotLeadTitle")} className="mb-6">
+      <div className="flex flex-wrap items-end gap-3 mb-4">
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.hotLeadOrigin")}</label>
+          <input type="text" value={origin} onChange={(e) => setOrigin(e.target.value)} className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm w-20" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.hotLeadDestination")}</label>
+          <input type="text" value={destination} onChange={(e) => setDestination(e.target.value)} className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm w-20" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.hotLeadProduct")}</label>
+          <input type="text" value={productOrHs} onChange={(e) => setProductOrHs(e.target.value)} placeholder="8504" className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm w-28" />
+        </div>
+        <button type="button" onClick={fetchCandidates} disabled={loading} className="rounded-md bg-pillar2/20 text-pillar2 px-4 py-2 text-sm font-medium hover:bg-pillar2/30 disabled:opacity-50">
+          {loading ? t("common.loading") : t("b2bTrade.hotLeadCandidates")}
+        </button>
+        <button type="button" onClick={createHotLeads} disabled={creating} className="rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+          {creating ? t("common.loading") : t("b2bTrade.hotLeadCreate")}
+        </button>
+      </div>
+      {candidates.length > 0 && (
+        <p className="text-sm text-muted-foreground mb-2">{candidates.length} candidates. Click &quot;Save as leads&quot; to create leads.</p>
+      )}
+      {created?.leads?.length > 0 && (
+        <p className="text-sm text-primary font-medium">{created.leads.length} leads created.</p>
+      )}
+    </SectionCard>
+  );
+}
+
+function ProposalSection() {
+  const { t } = useLanguage();
+  const [productName, setProductName] = useState("");
+  const [countryName, setCountryName] = useState("");
+  const [sectorName, setSectorName] = useState("");
+  const [partnerName, setPartnerName] = useState("");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const generate = () => {
+    setLoading(true);
+    setResult(null);
+    api.post("/b2b/proposal", {
+      product_name: productName || "[품목명]",
+      country_name: countryName || "[국가명]",
+      sector_name: sectorName || "[업종명]",
+      partner_name: partnerName || "[파트너]",
+      locale: "es",
+    })
+      .then((r) => setResult(r.data))
+      .catch(() => setResult(null))
+      .finally(() => setLoading(false));
+  };
+
+  return (
+    <SectionCard title={t("b2bTrade.proposalTitle")} className="mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.proposalProduct")}</label>
+          <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)} className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.proposalCountry")}</label>
+          <input type="text" value={countryName} onChange={(e) => setCountryName(e.target.value)} className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.proposalSector")}</label>
+          <input type="text" value={sectorName} onChange={(e) => setSectorName(e.target.value)} className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.proposalPartner")}</label>
+          <input type="text" value={partnerName} onChange={(e) => setPartnerName(e.target.value)} className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <button type="button" onClick={generate} disabled={loading} className="rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+        {loading ? t("common.loading") : t("b2bTrade.proposalGenerate")}
+      </button>
+      {result && (
+        <div className="mt-4 p-4 rounded-lg border border-border bg-muted/20 text-sm space-y-2">
+          <p><strong>Subject:</strong> {result.subject}</p>
+          <pre className="whitespace-pre-wrap text-muted-foreground">{result.body_prepared}</pre>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function MessageSection() {
+  const { t } = useLanguage();
+  const [body, setBody] = useState("");
+  const [targetCountry, setTargetCountry] = useState("DO");
+  const [mode, setMode] = useState("prepare");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const run = () => {
+    setLoading(true);
+    setResult(null);
+    const req = mode === "prepare"
+      ? api.post("/b2b/prepare-message", { body, locale: "es" })
+      : api.post("/b2b/validate-message", { body, target_country: targetCountry });
+    req
+      .then((r) => setResult(r.data))
+      .catch(() => setResult(null))
+      .finally(() => setLoading(false));
+  };
+
+  return (
+    <SectionCard title={t("b2bTrade.messageTitle")} className="mb-6">
+      <div className="mb-4">
+        <label className="block text-xs font-medium text-muted-foreground mb-1">{t("b2bTrade.messageBody")}</label>
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} className="w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm" />
+      </div>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <label className="inline-flex items-center gap-2">
+          <input type="radio" checked={mode === "prepare"} onChange={() => setMode("prepare")} />
+          {t("b2bTrade.messagePrepare")}
+        </label>
+        <label className="inline-flex items-center gap-2">
+          <input type="radio" checked={mode === "validate"} onChange={() => setMode("validate")} />
+          {t("b2bTrade.messageValidate")}
+        </label>
+        {mode === "validate" && (
+          <input type="text" value={targetCountry} onChange={(e) => setTargetCountry(e.target.value)} placeholder="DO" className="w-16 rounded-md border border-border px-2 py-1 text-sm" />
+        )}
+        <button type="button" onClick={run} disabled={loading} className="rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+          {loading ? t("common.loading") : (mode === "prepare" ? t("b2bTrade.messagePrepare") : t("b2bTrade.messageValidate"))}
+        </button>
+      </div>
+      {result && (
+        <div className="mt-4 p-4 rounded-lg border border-border bg-muted/20 text-sm">
+          {result.prepared != null && <pre className="whitespace-pre-wrap">{result.prepared}</pre>}
+          {result.approved != null && (
+            <p className="font-medium">
+              {result.approved ? t("b2bTrade.approved") : t("b2bTrade.rejected")}
+              {result.rejectReasons?.length > 0 && ` — ${result.rejectReasons.join(", ")}`}
+            </p>
+          )}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function PartnerVerificationSection() {
+  const { t } = useLanguage();
+  const [partnerId, setPartnerId] = useState("");
+  const [leadId, setLeadId] = useState("");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const checkByPartner = () => {
+    if (!partnerId.trim()) return;
+    setLoading(true);
+    setResult(null);
+    api.get(`/b2b/partners/${encodeURIComponent(partnerId.trim())}/verification-status`)
+      .then((r) => setResult({ type: "partner", data: r.data }))
+      .catch(() => setResult(null))
+      .finally(() => setLoading(false));
+  };
+
+  const checkByLead = () => {
+    if (!leadId.trim()) return;
+    setLoading(true);
+    setResult(null);
+    api.get(`/b2b/leads/${encodeURIComponent(leadId.trim())}/verification-status`)
+      .then((r) => setResult({ type: "lead", data: r.data }))
+      .catch(() => setResult(null))
+      .finally(() => setLoading(false));
+  };
+
+  return (
+    <SectionCard title={t("b2bTrade.partnerVerificationTitle")} className="mb-6">
+      <div className="flex flex-wrap gap-4 mb-4">
+        <div className="flex items-end gap-2">
+          <input
+            type="text"
+            placeholder={t("b2bTrade.verificationPartnerId")}
+            value={partnerId}
+            onChange={(e) => setPartnerId(e.target.value)}
+            className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm w-40"
+          />
+          <button type="button" onClick={checkByPartner} disabled={loading} className="rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+            {t("b2bTrade.verificationCheck")}
+          </button>
+        </div>
+        <div className="flex items-end gap-2">
+          <input
+            type="text"
+            placeholder={t("b2bTrade.verificationLeadId")}
+            value={leadId}
+            onChange={(e) => setLeadId(e.target.value)}
+            className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm w-40"
+          />
+          <button type="button" onClick={checkByLead} disabled={loading} className="rounded-md bg-pillar2 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+            {t("b2bTrade.verificationCheck")}
+          </button>
+        </div>
+      </div>
+      {loading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
+      {result?.data && (
+        <div className="mt-4 p-4 rounded-lg border border-border bg-muted/20 text-sm">
+          {result.type === "lead" && <p>Lead: {result.data.lead_id} — Approved: {String(result.data.approved)}</p>}
+          {result.data.verification && (
+            <p>Decision: {result.data.verification.decision} · Score: {result.data.verification.overall_score}</p>
+          )}
+          {result.type === "partner" && result.data && (
+            <p>Decision: {result.data.decision} · Score: {result.data.overall_score}</p>
+          )}
+        </div>
+      )}
     </SectionCard>
   );
 }

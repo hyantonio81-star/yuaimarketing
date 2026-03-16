@@ -100,9 +100,12 @@ function gpt4GeneratePitch(
   return `${customer.id}님, ${cat} 카테고리 인기 상품입니다. ${product.name} — 지금 만나보세요. (${context})`;
 }
 
+/** @param _orgId scope for future org-specific catalog */
 export function generateRecommendations(
   customer: RecommendationCustomer,
-  context: string = "email"
+  context: string = "email",
+  _orgId?: string,
+  _countryCode?: string
 ): RecommendationProduct[] {
   const similarCustomers = findSimilarCustomers(customer);
   const collaborativeRecs = getPopularAmongSimilar(similarCustomers);

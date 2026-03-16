@@ -1,7 +1,5 @@
 import { FastifyInstance } from "fastify";
 
 export async function registerRoutes(app: FastifyInstance) {
-  app.get("/", async () => {
-    return { message: "NEXUS AI backend ready" };
-  });
+  // GET "/" is served by static (index.html) when frontend dist exists; no root JSON route
 }

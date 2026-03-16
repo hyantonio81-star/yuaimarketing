@@ -1,9 +1,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { monitorKoreaProcurement } from "../services/koreaProcurementService.js";
-import { monitorInternationalTenders } from "../services/internationalTendersService.js";
+import { monitorInternationalTendersAsync } from "../services/internationalTendersService.js";
 import { checkQualification } from "../services/tenderQualificationService.js";
 import { calculateOptimalBid, type TenderForBid } from "../services/optimalBidService.js";
 import { generateProposal, type TenderForProposal } from "../services/proposalGenerationService.js";
+
+const GOV_TENDER_ENABLED = process.env.GOV_TENDER_ENABLED === "true";
 
 interface KoreaProcurementBody {
   user_keywords?: string[];
@@ -26,11 +28,26 @@ interface GenerateProposalBody {
 }
 
 export async function govRoutes(fastify: FastifyInstance) {
+  /** 수동 모드: GOV_TENDER_ENABLED !== 'true' 이면 API는 503 + manual 메시지 반환 */
+  fastify.get("/status", async () => ({
+    mode: GOV_TENDER_ENABLED ? "active" : "manual",
+    message: GOV_TENDER_ENABLED ? undefined : "정부 입찰 기능은 현재 수동 모드입니다. 활성화하려면 GOV_TENDER_ENABLED=true 로 설정하세요.",
+  }));
+
+  const manualReply = (reply: FastifyReply) => {
+    return reply.code(503).send({
+      mode: "manual",
+      error: "Gov Tender is in manual mode",
+      message: "정부 입찰 기능은 접어두었습니다. 사용하려면 서버에서 GOV_TENDER_ENABLED=true 로 설정하세요.",
+    });
+  };
+
   fastify.post<{
     Body: KoreaProcurementBody;
   }>(
     "/korea-procurement",
     async (request: FastifyRequest<{ Body: KoreaProcurementBody }>, reply: FastifyReply) => {
+      if (!GOV_TENDER_ENABLED) return manualReply(reply);
       const userKeywords = request.body?.user_keywords;
       const list = Array.isArray(userKeywords)
         ? userKeywords.map((k) => String(k)).filter(Boolean)
@@ -41,7 +58,8 @@ export async function govRoutes(fastify: FastifyInstance) {
 
   fastify.post<{
     Body: InternationalTendersBody;
-  }>("/international-tenders", async (request: FastifyRequest<{ Body: InternationalTendersBody }>) => {
+  }>("/international-tenders", async (request: FastifyRequest<{ Body: InternationalTendersBody }>, reply: FastifyReply) => {
+    if (!GOV_TENDER_ENABLED) return manualReply(reply);
     const profile = request.body?.user_profile;
     const userProfile =
       profile?.keywords?.length || profile?.sectors?.length
@@ -50,12 +68,13 @@ export async function govRoutes(fastify: FastifyInstance) {
             sectors: Array.isArray(profile.sectors) ? profile.sectors.map(String) : undefined,
           }
         : undefined;
-    return monitorInternationalTenders(userProfile);
+    return await monitorInternationalTendersAsync(userProfile);
   });
 
   fastify.post<{
     Body: CheckQualificationBody;
   }>("/check-qualification", async (request: FastifyRequest<{ Body: CheckQualificationBody }>, reply: FastifyReply) => {
+    if (!GOV_TENDER_ENABLED) return manualReply(reply);
     const body = request.body;
     const t = body?.tender;
     if (!t) {
@@ -68,6 +87,7 @@ export async function govRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: OptimalBidBody;
   }>("/optimal-bid", async (request: FastifyRequest<{ Body: OptimalBidBody }>, reply: FastifyReply) => {
+    if (!GOV_TENDER_ENABLED) return manualReply(reply);
     const body = request.body;
     const t = body?.tender;
     if (!t) {
@@ -87,6 +107,7 @@ export async function govRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: GenerateProposalBody;
   }>("/generate-proposal", async (request: FastifyRequest<{ Body: GenerateProposalBody }>, reply: FastifyReply) => {
+    if (!GOV_TENDER_ENABLED) return manualReply(reply);
     const body = request.body;
     const t = body?.tender;
     if (!t) {

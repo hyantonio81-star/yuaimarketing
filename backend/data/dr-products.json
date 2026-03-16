@@ -1,0 +1,19 @@
+[
+  {
+    "id": "dr_sample_1",
+    "slug": "cafe-organico-dr",
+    "title": "Café orgánico dominicano",
+    "description": "Café de altura comprado directamente a productores en la región de Cibao. Tostado localmente.",
+    "price": 12.99,
+    "currency": "USD",
+    "image": "https://images.unsplash.com/photo-1559056199-641a0ac8b55e?w=400&h=300&fit=crop",
+    "category": "food",
+    "origin": "Dominican Republic",
+    "stock_quantity": 50,
+    "is_visible": true,
+    "contact_whatsapp": "+18095551234",
+    "contact_email": "hyantonio81@gmail.com",
+    "created_at": "2025-02-01T00:00:00.000Z",
+    "updated_at": "2025-02-01T00:00:00.000Z"
+  }
+]

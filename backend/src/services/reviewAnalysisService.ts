@@ -39,6 +39,8 @@ export interface ReviewAnalysisResult {
   action_items: ActionItem[];
   review_volume_trend: ReviewVolumeTrend;
   total_reviews: number;
+  /** AI-generated one-line summary when GEMINI_API_KEY or OPENAI_API_KEY is set */
+  ai_summary?: string;
 }
 
 function simpleHash(str: string): number {
@@ -63,7 +65,7 @@ const SAMPLE_TEXTS = [
   "반품 절차가 복잡해요",
 ];
 
-function collectReviewsAllChannels(product: ProductForReview): Review[] {
+export function collectReviewsAllChannels(product: ProductForReview): Review[] {
   const n = 15 + (simpleHash(product.sku) % 25);
   const channels = ["Coupang", "Naver", "Amazon", "자체몰"];
   return Array.from({ length: n }, (_, i) => ({
@@ -125,7 +127,8 @@ function analyzeVolumeTrend(reviews: Review[]): ReviewVolumeTrend {
   return { direction, change_pct: changePct, period: "최근 30일" };
 }
 
-export function analyzeReviews(product: ProductForReview): ReviewAnalysisResult {
+/** @param _orgId scope for future channel-specific reviews */
+export function analyzeReviews(product: ProductForReview, _orgId?: string, _countryCode?: string): ReviewAnalysisResult {
   const reviews = collectReviewsAllChannels(product);
 
   const sentiment_dist = { positive: 0, neutral: 0, negative: 0 };
@@ -164,4 +167,72 @@ export function analyzeReviews(product: ProductForReview): ReviewAnalysisResult 
     review_volume_trend,
     total_reviews: reviews.length,
   };
+}
+
+const AI_SUMMARY_TIMEOUT_MS = 12_000;
+
+/** Generate a one-line AI summary of reviews. Returns undefined if no API key, timeout, or error. */
+export async function generateAiReviewSummary(reviews: Review[]): Promise<string | undefined> {
+  const sample = reviews.slice(0, 20).map((r) => r.text).join(" ");
+  if (!sample.trim()) return undefined;
+  const prompt = `다음 고객 리뷰들을 한 줄(최대 100자)로 요약해주세요. 긍정/부정 비율과 주요 이슈만 간단히.\n\n리뷰:\n${sample.slice(0, 2000)}`;
+
+  const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T | undefined> =>
+    Promise.race([p, new Promise<undefined>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]).catch(() => undefined);
+
+  const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+  if (geminiKey) {
+    try {
+      const out = await withTimeout(
+        (async () => {
+          const { GoogleGenerativeAI } = await import("@google/generative-ai");
+          const genAI = new GoogleGenerativeAI(geminiKey);
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+          const result = await model.generateContent(prompt);
+          const text = result.response.text?.()?.trim();
+          return text ? text.slice(0, 200) : undefined;
+        })(),
+        AI_SUMMARY_TIMEOUT_MS
+      );
+      if (out) return out;
+    } catch {
+      // fallback to OpenAI
+    }
+  }
+
+  const openaiKey = (process.env.OPENAI_API_KEY ?? "").trim();
+  if (openaiKey) {
+    try {
+      const out = await withTimeout(
+        (async () => {
+          const { default: OpenAI } = await import("openai");
+          const openai = new OpenAI({ apiKey: openaiKey });
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 150,
+          });
+          const text = completion.choices?.[0]?.message?.content?.trim();
+          return text ? text.slice(0, 200) : undefined;
+        })(),
+        AI_SUMMARY_TIMEOUT_MS
+      );
+      if (out) return out;
+    } catch {
+      // skip
+    }
+  }
+  return undefined;
+}
+
+/** Like analyzeReviews but adds ai_summary via one LLM call when API key is available. */
+export async function analyzeReviewsWithAiSummary(
+  product: ProductForReview,
+  _orgId?: string,
+  _countryCode?: string
+): Promise<ReviewAnalysisResult> {
+  const result = analyzeReviews(product, _orgId, _countryCode);
+  const reviews = collectReviewsAllChannels(product);
+  const ai_summary = await generateAiReviewSummary(reviews);
+  return ai_summary ? { ...result, ai_summary } : result;
 }

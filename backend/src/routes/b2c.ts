@@ -1,12 +1,47 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { checkRateLimitApi } from "../lib/rateLimit.js";
+import {
+  sanitizeOrgId,
+  sanitizeCountryCodeWithDefault,
+  sanitizeShortString,
+  sanitizeNumber,
+} from "../lib/apiSecurity.js";
 import { updateInventory } from "../services/inventorySyncService.js";
 import { processOrderAuto, type OrderInput } from "../services/orderAutomationService.js";
 import { calculateOptimalPrice, type ProductInput } from "../services/optimalPriceService.js";
-import { planPromotion, type ProductForPromo, type PromotionGoal } from "../services/promotionPlanService.js";
-import { analyzeReviews, type ProductForReview } from "../services/reviewAnalysisService.js";
+import { planPromotionWithAiCopy, type ProductForPromo, type PromotionGoal } from "../services/promotionPlanService.js";
+import { analyzeReviewsWithAiSummary, type ProductForReview } from "../services/reviewAnalysisService.js";
 import { handleNegativeReview, type NegativeReviewInput } from "../services/negativeReviewHandlerService.js";
 import { churnPreventionCampaign } from "../services/churnPreventionService.js";
 import { generateRecommendations, type RecommendationCustomer } from "../services/recommendationService.js";
+import {
+  getConnections,
+  connectChannel,
+  disconnectChannel,
+  type ChannelId,
+} from "../services/ecommerceConnectionsService.js";
+import { getB2cSettingsAsync, setB2cSettingsAsync } from "../services/b2cSettingsService.js";
+import {
+  listPendingAsync,
+  resolvePendingAsync,
+  countPendingAsync,
+} from "../services/b2cPendingApprovalsService.js";
+import { getPromoShortlist } from "../services/threadsCommerce/index.js";
+import type { MarketplaceId } from "../services/threadsCommerce/types.js";
+
+/** Request scope: organization + country (Pillar 3 = 판매 국가 기준). */
+function getB2cScope(request: FastifyRequest): { organization_id?: string; country_code?: string } {
+  const rawCountry = (request.headers["x-country"] as string)?.trim() || (request.query as { country?: string })?.country?.trim();
+  const rawOrgId = (request.headers["x-organization-id"] as string)?.trim();
+  const country_code = rawCountry ? sanitizeCountryCodeWithDefault(rawCountry, "US") : undefined;
+  const organization_id = rawOrgId ? sanitizeOrgId(rawOrgId) : undefined;
+  return { ...(country_code && { country_code }), ...(organization_id && organization_id !== "default" && { organization_id }) };
+}
+
+function getOrgId(request: FastifyRequest): string {
+  const raw = (request.headers["x-organization-id"] as string)?.trim();
+  return sanitizeOrgId(raw || "default");
+}
 
 interface UpdateInventoryBody {
   sku: string;
@@ -46,7 +81,138 @@ interface RecommendationsBody {
   context?: string;
 }
 
+const VALID_CHANNELS: ChannelId[] = ["shopify"];
+/** 최적가 계산용 채널: 프론트 드롭다운과 일치 (대소문자 무시) */
+const OPTIMAL_PRICE_CHANNELS = ["coupang", "naver smartstore", "shopify", "amazon", "11번가"];
+const MAX_SKU_LENGTH = 64;
+const MAX_EMAIL_LENGTH = 200;
+const MAX_REVIEW_TEXT_LENGTH = 2000;
+
 export async function b2cRoutes(fastify: FastifyInstance) {
+  fastify.addHook("preHandler", async (request, reply) => {
+    if (!checkRateLimitApi(request)) {
+      return reply.code(429).send({ error: "Too Many Requests", message: "요청 한도를 초과했습니다. 잠시 후 다시 시도하세요." });
+    }
+  });
+
+  /** 이커머스 채널 연동 목록 (조직별) */
+  fastify.get("/connections", async (request: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = getOrgId(request);
+    const connections = await getConnections(orgId);
+    return { connections };
+  });
+
+  /** 시뮬레이션용 제품 목록: 제휴 shortlist에서 가져와 B2C 최적가/프로모션 등에 쓸 수 있는 형태로 반환 */
+  fastify.get<{
+    Querystring: { marketplace?: string; limit?: string; min_score?: string };
+  }>("/simulation-products", async (request: FastifyRequest<{ Querystring: { marketplace?: string; limit?: string; min_score?: string } }>) => {
+    const q = request.query ?? {};
+    const marketplace = (q.marketplace as MarketplaceId) || "amazon";
+    const limit = Math.min(20, Math.max(1, parseInt(q.limit ?? "10", 10) || 10));
+    const min_score = q.min_score != null ? parseInt(String(q.min_score), 10) : undefined;
+    const { shortlist } = await getPromoShortlist(marketplace, {
+      limit,
+      min_score: Number.isFinite(min_score) ? min_score : undefined,
+    });
+    const products = shortlist.map((p) => {
+      const price = p.price ?? 0;
+      const suggested_cost = price > 0 ? Math.round(price * 0.65 * 100) / 100 : 0;
+      return {
+        sku: p.id,
+        title: p.title,
+        price,
+        suggested_cost,
+        marketplace: p.marketplace,
+        category: p.category,
+        url: p.url,
+        imageUrl: p.imageUrl,
+        composite_score: p.promo_scores?.composite_score ?? 0,
+      };
+    });
+    return { products };
+  });
+
+  /** 이커머스 채널 연동하기 (예: Shopify store URL + API token) */
+  fastify.post<{
+    Body: { channel?: ChannelId; store_url?: string; store_name?: string; api_token?: string };
+  }>("/connections", async (request: FastifyRequest<{ Body: { channel?: ChannelId; store_url?: string; store_name?: string; api_token?: string } }>, reply: FastifyReply) => {
+    const body = request.body ?? {};
+    const channel = (body.channel ?? "shopify").toLowerCase() as ChannelId;
+    if (!VALID_CHANNELS.includes(channel)) {
+      return reply.code(400).send({ error: "Invalid channel. Supported: shopify" });
+    }
+    const orgId = getOrgId(request);
+    const info = await connectChannel(orgId, channel, {
+      store_url: sanitizeShortString(body.store_url, 500),
+      store_name: sanitizeShortString(body.store_name, 100),
+      api_token: sanitizeShortString(body.api_token, 200),
+    });
+    return { ok: true, connection: info };
+  });
+
+  /** 이커머스 채널 연동 해제 */
+  fastify.delete<{ Querystring: { channel?: string } }>("/connections", async (request: FastifyRequest<{ Querystring: { channel?: string } }>, reply: FastifyReply) => {
+    const channel = (request.query?.channel ?? "").toLowerCase() as ChannelId;
+    if (!VALID_CHANNELS.includes(channel)) {
+      return reply.code(400).send({ error: "Invalid channel. Supported: shopify" });
+    }
+    const orgId = getOrgId(request);
+    const removed = await disconnectChannel(orgId, channel);
+    return removed ? { ok: true } : reply.code(404).send({ error: "Connection not found" });
+  });
+
+  /** B2C AI 설정 (반자율화 vs 자율화) */
+  fastify.get("/settings", async (request: FastifyRequest) => {
+    const orgId = getOrgId(request);
+    return getB2cSettingsAsync(orgId);
+  });
+
+  fastify.put<{
+    Body: { ai_automation_enabled?: boolean };
+  }>("/settings", async (request: FastifyRequest<{ Body: { ai_automation_enabled?: boolean } }>, reply: FastifyReply) => {
+    const orgId = getOrgId(request);
+    const enabled = request.body?.ai_automation_enabled;
+    if (typeof enabled !== "boolean") {
+      return reply.code(400).send({ error: "ai_automation_enabled (boolean) required" });
+    }
+    return setB2cSettingsAsync(orgId, { ai_automation_enabled: enabled });
+  });
+
+  /** 승인 대기 목록 (반자율화 시) */
+  fastify.get<{
+    Querystring: { status?: string };
+  }>("/pending-approvals", async (request: FastifyRequest<{ Querystring: { status?: string } }>) => {
+    const orgId = getOrgId(request);
+    const rawStatus = request.query?.status;
+    const status = ["pending", "approved", "rejected"].includes(String(rawStatus ?? "")) ? (rawStatus as "pending" | "approved" | "rejected") : undefined;
+    const list = await listPendingAsync(orgId, status);
+    const count = await countPendingAsync(orgId);
+    return { items: list, pending_count: count };
+  });
+
+  fastify.post<{
+    Params: { id: string };
+    Body: { action?: string };
+  }>("/pending-approvals/:id/approve", async (request: FastifyRequest<{ Params: { id: string }; Body: { action?: string } }>, reply: FastifyReply) => {
+    const orgId = getOrgId(request);
+    const id = sanitizeShortString(request.params?.id, 64);
+    if (!id) return reply.code(400).send({ error: "id required" });
+    const resolved = await resolvePendingAsync(id, orgId, "approve");
+    if (!resolved) return reply.code(404).send({ error: "Not found or already resolved" });
+    return { ok: true, item: resolved };
+  });
+
+  fastify.post<{
+    Params: { id: string };
+  }>("/pending-approvals/:id/reject", async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const orgId = getOrgId(request);
+    const id = sanitizeShortString(request.params?.id, 64);
+    if (!id) return reply.code(400).send({ error: "id required" });
+    const resolved = await resolvePendingAsync(id, orgId, "reject");
+    if (!resolved) return reply.code(404).send({ error: "Not found or already resolved" });
+    return { ok: true, item: resolved };
+  });
+
   fastify.post<{
     Body: UpdateInventoryBody;
   }>("/inventory-sync", async (request: FastifyRequest<{ Body: UpdateInventoryBody }>, reply: FastifyReply) => {
@@ -54,8 +220,14 @@ export async function b2cRoutes(fastify: FastifyInstance) {
     if (sku == null || quantity_change == null) {
       return reply.code(400).send({ error: "sku and quantity_change required" });
     }
-    const result = updateInventory(String(sku), Number(quantity_change));
-    return result;
+    const safeSku = sanitizeShortString(sku, MAX_SKU_LENGTH);
+    if (!safeSku) return reply.code(400).send({ error: "sku required" });
+    const qty = sanitizeNumber(quantity_change, 0, -1e6, 1e6);
+    const scope = getB2cScope(request);
+    const orgId = scope.organization_id ?? getOrgId(request);
+    const countryCode = scope.country_code ?? null;
+    const result = await updateInventory(orgId, countryCode, safeSku, qty);
+    return Object.keys(scope).length ? { ...result, meta: { scope } } : result;
   });
 
   fastify.post<{
@@ -65,12 +237,20 @@ export async function b2cRoutes(fastify: FastifyInstance) {
     if (!body?.id || !body?.customer?.email || !Array.isArray(body?.items) || body.items.length === 0) {
       return reply.code(400).send({ error: "id, customer.email, and non-empty items[] required" });
     }
+    const scope = getB2cScope(request);
+    const orgId = scope.organization_id ?? getOrgId(request);
+    const countryCode = scope.country_code ?? undefined;
     const order: OrderInput = {
-      id: String(body.id),
-      customer: { email: String(body.customer.email) },
-      items: body.items.map((i) => ({ sku: String(i.sku), quantity: Number(i.quantity) || 1 })),
+      id: sanitizeShortString(body.id, 64),
+      customer: { email: sanitizeShortString(body.customer.email, MAX_EMAIL_LENGTH) },
+      items: body.items.slice(0, 200).map((i) => ({
+        sku: sanitizeShortString(i.sku, MAX_SKU_LENGTH),
+        quantity: sanitizeNumber(i.quantity, 1, 1, 1e5),
+      })),
     };
-    return processOrderAuto(order);
+    if (!order.id || !order.customer.email) return reply.code(400).send({ error: "id and customer.email required" });
+    const result = processOrderAuto(order, orgId, countryCode);
+    return Object.keys(scope).length ? { ...result, meta: { scope } } : result;
   });
 
   fastify.post<{
@@ -87,13 +267,22 @@ export async function b2cRoutes(fastify: FastifyInstance) {
     ) {
       return reply.code(400).send({ error: "product.sku, product.cost, product.target_margin, product.current_price, channel required" });
     }
+    const chNormalized = String(body.channel).toLowerCase().trim();
+    if (!OPTIMAL_PRICE_CHANNELS.includes(chNormalized)) {
+      return reply.code(400).send({ error: "Invalid channel. Supported: Coupang, Naver SmartStore, Shopify, Amazon, 11번가" });
+    }
+    const scope = getB2cScope(request);
+    const orgId = scope.organization_id ?? getOrgId(request);
+    const countryCode = scope.country_code ?? undefined;
     const product: ProductInput = {
-      sku: String(prod.sku),
-      cost: Number(prod.cost),
-      target_margin: Number(prod.target_margin),
-      current_price: Number(prod.current_price),
+      sku: sanitizeShortString(prod.sku, MAX_SKU_LENGTH),
+      cost: sanitizeNumber(prod.cost, 0, 0, 1e12),
+      target_margin: sanitizeNumber(prod.target_margin, 0, 0, 100),
+      current_price: sanitizeNumber(prod.current_price, 0, 0, 1e12),
     };
-    return calculateOptimalPrice(product, String(body.channel));
+    if (!product.sku) return reply.code(400).send({ error: "product.sku required" });
+    const result = calculateOptimalPrice(product, chNormalized, orgId, countryCode);
+    return Object.keys(scope).length ? { ...result, meta: { scope } } : result;
   });
 
   fastify.post<{
@@ -104,15 +293,20 @@ export async function b2cRoutes(fastify: FastifyInstance) {
     if (!prod?.sku) {
       return reply.code(400).send({ error: "product.sku required" });
     }
+    const scope = getB2cScope(request);
+    const orgId = scope.organization_id ?? getOrgId(request);
+    const countryCode = scope.country_code ?? undefined;
     const product: ProductForPromo = {
-      sku: String(prod.sku),
-      name: prod.name != null ? String(prod.name) : undefined,
-      base_price: typeof prod.base_price === "number" ? prod.base_price : undefined,
+      sku: sanitizeShortString(prod.sku, MAX_SKU_LENGTH),
+      name: prod.name != null ? sanitizeShortString(prod.name, 200) : undefined,
+      base_price: typeof prod.base_price === "number" ? sanitizeNumber(prod.base_price, 0, 0, 1e12) : undefined,
     };
+    if (!product.sku) return reply.code(400).send({ error: "product.sku required" });
     const goal: PromotionGoal = ["revenue", "profit", "clearance"].includes(body?.goal as PromotionGoal)
       ? (body.goal as PromotionGoal)
       : "revenue";
-    return planPromotion(product, goal);
+    const result = await planPromotionWithAiCopy(product, goal, orgId, countryCode);
+    return Object.keys(scope).length ? { ...result, meta: { scope } } : result;
   });
 
   fastify.post<{
@@ -123,8 +317,14 @@ export async function b2cRoutes(fastify: FastifyInstance) {
     if (!prod?.sku) {
       return reply.code(400).send({ error: "product.sku required" });
     }
-    const product: ProductForReview = { sku: String(prod.sku) };
-    return analyzeReviews(product);
+    const sku = sanitizeShortString(prod.sku, MAX_SKU_LENGTH);
+    if (!sku) return reply.code(400).send({ error: "product.sku required" });
+    const scope = getB2cScope(request);
+    const orgId = scope.organization_id ?? getOrgId(request);
+    const countryCode = scope.country_code ?? undefined;
+    const product: ProductForReview = { sku };
+    const result = await analyzeReviewsWithAiSummary(product, orgId, countryCode);
+    return Object.keys(scope).length ? { ...result, meta: { scope } } : result;
   });
 
   fastify.post<{
@@ -135,20 +335,29 @@ export async function b2cRoutes(fastify: FastifyInstance) {
     if (!r?.text || typeof r.text !== "string") {
       return reply.code(400).send({ error: "review.text required" });
     }
+    const scope = getB2cScope(request);
+    const orgId = scope.organization_id ?? getOrgId(request);
+    const countryCode = scope.country_code ?? undefined;
     const review: NegativeReviewInput = {
-      id: r.id != null ? String(r.id) : undefined,
-      text: String(r.text),
-      channel: r.channel != null ? String(r.channel) : undefined,
-      rating: typeof r.rating === "number" ? r.rating : undefined,
+      id: r.id != null ? sanitizeShortString(r.id, 64) : undefined,
+      text: sanitizeShortString(r.text, MAX_REVIEW_TEXT_LENGTH),
+      channel: r.channel != null ? sanitizeShortString(r.channel, 50) : undefined,
+      rating: typeof r.rating === "number" ? sanitizeNumber(r.rating, 0, 0, 5) : undefined,
     };
-    return handleNegativeReview(review);
+    if (!review.text) return reply.code(400).send({ error: "review.text required" });
+    const result = handleNegativeReview(review, orgId, countryCode);
+    return Object.keys(scope).length ? { ...result, meta: { scope } } : result;
   });
 
   fastify.post<{
     Body: ChurnCampaignBody;
   }>("/churn-prevention-campaign", async (request: FastifyRequest<{ Body: ChurnCampaignBody }>) => {
-    const limit = typeof request.body?.limit === "number" ? Math.min(200, request.body.limit) : 100;
-    return churnPreventionCampaign(limit);
+    const scope = getB2cScope(request);
+    const orgId = scope.organization_id ?? getOrgId(request);
+    const countryCode = scope.country_code ?? undefined;
+    const limit = sanitizeNumber(request.body?.limit, 100, 1, 200);
+    const result = churnPreventionCampaign(limit, orgId, countryCode);
+    return Object.keys(scope).length ? { ...result, meta: { scope } } : result;
   });
 
   fastify.post<{
@@ -159,12 +368,18 @@ export async function b2cRoutes(fastify: FastifyInstance) {
     if (!c?.id) {
       return reply.code(400).send({ error: "customer.id required" });
     }
+    const customerId = sanitizeShortString(c.id, 64);
+    if (!customerId) return reply.code(400).send({ error: "customer.id required" });
+    const scope = getB2cScope(request);
+    const orgId = scope.organization_id ?? getOrgId(request);
+    const countryCode = scope.country_code ?? undefined;
     const customer: RecommendationCustomer = {
-      id: String(c.id),
-      order_history: Array.isArray(c.order_history) ? c.order_history.map(String) : undefined,
-      favorite_category: c.favorite_category != null ? String(c.favorite_category) : undefined,
+      id: customerId,
+      order_history: Array.isArray(c.order_history) ? c.order_history.slice(0, 500).map((x) => sanitizeShortString(x, 64)) : undefined,
+      favorite_category: c.favorite_category != null ? sanitizeShortString(c.favorite_category, 100) : undefined,
     };
-    const context = body?.context ?? "email";
-    return generateRecommendations(customer, context);
+    const context = sanitizeShortString(body?.context ?? "email", 50) || "email";
+    const result = generateRecommendations(customer, context, orgId, countryCode);
+    return Object.keys(scope).length ? { ...result, meta: { scope } } : result;
   });
 }

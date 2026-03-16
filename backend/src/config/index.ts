@@ -6,4 +6,8 @@ export const config = {
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
     anonKey: process.env.SUPABASE_ANON_KEY ?? "",
   },
+  routine: {
+    timezone: process.env.TZ || process.env.ROUTINE_TIMEZONE || "Asia/Seoul",
+    enabled: process.env.DAILY_ROUTINE_ENABLED !== "false",
+  },
 };

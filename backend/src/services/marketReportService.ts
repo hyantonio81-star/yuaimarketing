@@ -1,8 +1,67 @@
 /**
- * 시장성 평가 리포트 (전체 리포트 형식)
+ * 시장성 평가 리포트 (전체 리포트 형식). lang=ko|en|es 로 언어별 출력.
  */
 
 import { marketScore } from "./marketScoreService.js";
+
+export type ReportLang = "ko" | "en" | "es";
+
+const MARKET_REPORT_COPY: Record<
+  ReportLang,
+  {
+    marketSize: { sufficient: string; limited: string };
+    competition: { timing: string; opportunity: string; intense: string };
+    profitability: { strong: string; review: string };
+    trend: { momentum: string };
+    risks: string[];
+    verdict: { recommend: string; caution: string };
+    strategy: string;
+    breakevenLabel: string;
+  }
+> = {
+  ko: {
+    marketSize: { sufficient: "✅ 충분한 시장 규모", limited: "⚠️ 제한적 시장 규모" },
+    competition: { timing: "적절 (성장기 초기)", opportunity: "⚠️ 경쟁 있으나 기회 존재", intense: "⚠️ 경쟁 심화" },
+    profitability: { strong: "✅ 우수한 수익성", review: "⚠️ 수익성 검토 필요" },
+    trend: { momentum: "✅ 강한 상승 모멘텀" },
+    risks: [
+      "⚠️ 규제 변화 가능성 (FDA 승인 필요)",
+      "⚠️ 공급망 리스크 (원자재 중국 의존 78%)",
+      "⚠️ 기술 변화 속도 (18개월 제품 수명)",
+    ],
+    verdict: { recommend: "✅ **진입 권장** - 시장성 높음", caution: "⚠️ **신중 검토** - 리스크 관리 필요" },
+    strategy: "프리미엄 포지셔닝 + 틈새 공략",
+    breakevenLabel: "개월",
+  },
+  en: {
+    marketSize: { sufficient: "✅ Sufficient market size", limited: "⚠️ Limited market size" },
+    competition: { timing: "Appropriate (early growth)", opportunity: "⚠️ Competition but opportunity exists", intense: "⚠️ Intense competition" },
+    profitability: { strong: "✅ Strong profitability", review: "⚠️ Profitability review needed" },
+    trend: { momentum: "✅ Strong upward momentum" },
+    risks: [
+      "⚠️ Regulatory change (FDA approval may be required)",
+      "⚠️ Supply chain risk (78% raw material dependency on China)",
+      "⚠️ Pace of tech change (18‑month product lifecycle)",
+    ],
+    verdict: { recommend: "✅ **Recommend entry** - High market potential", caution: "⚠️ **Proceed with caution** - Risk management needed" },
+    strategy: "Premium positioning + niche focus",
+    breakevenLabel: "months",
+  },
+  es: {
+    marketSize: { sufficient: "✅ Tamaño de mercado suficiente", limited: "⚠️ Tamaño de mercado limitado" },
+    competition: { timing: "Apropiado (fase de crecimiento temprano)", opportunity: "⚠️ Competencia pero existe oportunidad", intense: "⚠️ Competencia intensa" },
+    profitability: { strong: "✅ Rentabilidad sólida", review: "⚠️ Revisar rentabilidad" },
+    trend: { momentum: "✅ Fuerte momentum alcista" },
+    risks: [
+      "⚠️ Cambio regulatorio (posible aprobación FDA)",
+      "⚠️ Riesgo de cadena de suministro (78% dependencia de China)",
+      "⚠️ Velocidad del cambio tecnológico (ciclo de vida 18 meses)",
+    ],
+    verdict: { recommend: "✅ **Recomendado entrar** - Alto potencial", caution: "⚠️ **Revisar con cautela** - Gestión de riesgos necesaria" },
+    strategy: "Posicionamiento premium + enfoque en nicho",
+    breakevenLabel: "meses",
+  },
+};
 
 function simpleHash(str: string): number {
   let h = 0;
@@ -70,19 +129,24 @@ export interface MarketReport {
   };
 }
 
-export function generateMarketReport(productName: string): MarketReport {
+function getLocale(lang: ReportLang): string {
+  return lang === "es" ? "es-ES" : lang === "en" ? "en-US" : "ko-KR";
+}
+
+export function generateMarketReport(productName: string, lang: ReportLang = "ko"): MarketReport {
   const item = (productName || "제품").trim() || "제품";
   const scoreResult = marketScore(item);
   const total = Math.round(scoreResult.total);
   const stars = total >= 80 ? "⭐⭐⭐⭐⭐" : total >= 60 ? "⭐⭐⭐⭐" : total >= 40 ? "⭐⭐⭐" : "⭐⭐";
 
   const s = deriveStubs(item);
-  const ltvNum = s.ltv;
-  const cacNum = s.cac;
+  const ltvNum = Number(s.ltv);
+  const cacNum = Number(s.cac);
+  const copy = MARKET_REPORT_COPY[lang] ?? MARKET_REPORT_COPY.ko;
 
   return {
     productName: item,
-    generatedAt: new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }),
+    generatedAt: new Date().toLocaleString(getLocale(lang), { timeZone: "UTC" }),
     totalScore: total,
     starRating: stars,
     sections: {
@@ -91,37 +155,33 @@ export function generateMarketReport(productName: string): MarketReport {
         sam: `$${s.sam}B`,
         som: `$${s.som}M`,
         cagr: `${s.cagr}%`,
-        evaluation: total >= 50 ? "✅ 충분한 시장 규모" : "⚠️ 제한적 시장 규모",
+        evaluation: total >= 50 ? copy.marketSize.sufficient : copy.marketSize.limited,
       },
       competition: {
         competitors: s.competitors,
         hhi: s.hhi,
-        entryTiming: "적절 (성장기 초기)",
-        evaluation: s.competitors <= 6 ? "⚠️ 경쟁 있으나 기회 존재" : "⚠️ 경쟁 심화",
+        entryTiming: copy.competition.timing,
+        evaluation: s.competitors <= 6 ? copy.competition.opportunity : copy.competition.intense,
       },
       profitability: {
         avgMargin: s.margin,
         cac: s.cac,
         ltv: ltvNum,
         ltvCac: s.ltvCac,
-        evaluation: ltvNum / cacNum >= 10 ? "✅ 우수한 수익성" : "⚠️ 수익성 검토 필요",
+        evaluation: ltvNum / cacNum >= 10 ? copy.profitability.strong : copy.profitability.review,
       },
       trend: {
         searchGrowth: s.searchGrowth,
         socialGrowth: s.socialGrowth,
         investment6m: s.investment6m,
-        evaluation: "✅ 강한 상승 모멘텀",
+        evaluation: copy.trend.momentum,
       },
-      risks: [
-        "⚠️ 규제 변화 가능성 (FDA 승인 필요)",
-        "⚠️ 공급망 리스크 (원자재 중국 의존 78%)",
-        "⚠️ 기술 변화 속도 (18개월 제품 수명)",
-      ],
+      risks: copy.risks,
       aiRecommendation: {
-        verdict: total >= 60 ? "✅ **진입 권장** - 시장성 높음" : "⚠️ **신중 검토** - 리스크 관리 필요",
-        strategy: "프리미엄 포지셔닝 + 틈새 공략",
-        investmentRange: `$${Math.round(s.investMin / 1000)}K-${Math.round(s.investMax / 1000)}K`,
-        breakeven: `${s.breakevenMonths}-${s.breakevenMonths + 4}개월`,
+        verdict: total >= 60 ? copy.verdict.recommend : copy.verdict.caution,
+        strategy: copy.strategy,
+        investmentRange: `$${Math.round(Number(s.investMin) / 1000)}K-${Math.round(Number(s.investMax) / 1000)}K`,
+        breakeven: `${s.breakevenMonths}-${s.breakevenMonths + 4} ${copy.breakevenLabel}`,
       },
     },
   };

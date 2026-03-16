@@ -1,9 +1,12 @@
-import { useState } from "react";
-import { Search, Bell, AlertTriangle, Building2, Calendar, Globe, FileCheck, TrendingUp, FileText } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Bell, AlertTriangle, Building2, Calendar, Globe, FileCheck, TrendingUp, FileText, Info } from "lucide-react";
 import SectionCard from "../components/SectionCard";
 import { api } from "../lib/api";
 
 export default function GovTender() {
+  const [govManualMode, setGovManualMode] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(true);
+
   const [keywords, setKeywords] = useState("시스템, 소프트웨어, 전자, 정보, 유지보수, 클라우드");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -37,6 +40,12 @@ export default function GovTender() {
   const [propLoading, setPropLoading] = useState(false);
   const [propResult, setPropResult] = useState(null);
   const [propError, setPropError] = useState(null);
+
+  useEffect(() => {
+    api.get("/gov/status").then(({ data }) => {
+      setGovManualMode(data?.mode === "manual");
+    }).catch(() => setGovManualMode(true)).finally(() => setStatusLoading(false));
+  }, []);
 
   const runMonitor = async () => {
     setLoading(true);
@@ -138,12 +147,24 @@ export default function GovTender() {
 
   return (
     <div className="p-6 lg:p-8">
+      {!statusLoading && govManualMode && (
+        <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-sm">
+          <Info className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+          <div>
+            <p className="font-medium text-foreground">정부 입찰 기능은 현재 수동 모드입니다.</p>
+            <p className="text-muted-foreground mt-1">
+              이 기능을 사용하려면 서버 관리자에게 <code className="rounded bg-muted px-1">GOV_TENDER_ENABLED=true</code> 설정을 요청하세요.
+            </p>
+          </div>
+        </div>
+      )}
+
       <header className="mb-8">
         <h1 className="text-2xl font-bold text-foreground tracking-tight">
           Pillar 4 — Gov Tender (G2B)
         </h1>
         <p className="text-muted-foreground mt-1">
-          나라장터·공공입찰 자동 모니터링 (10%)
+          나라장터·공공입찰 자동 모니터링 {govManualMode && "(수동 모드 — 접어둠)"}
         </p>
       </header>
 
@@ -165,7 +186,7 @@ export default function GovTender() {
         </div>
         <button
           onClick={runMonitor}
-          disabled={loading}
+          disabled={loading || govManualMode}
           className="flex items-center gap-2 rounded bg-pillar4 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           <Search className={`w-4 h-4 ${loading ? "animate-pulse" : ""}`} />
@@ -248,7 +269,7 @@ export default function GovTender() {
         </div>
         <button
           onClick={runInternationalTenders}
-          disabled={intlLoading}
+          disabled={intlLoading || govManualMode}
           className="flex items-center gap-2 rounded bg-pillar4 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           <Globe className={`w-4 h-4 ${intlLoading ? "animate-pulse" : ""}`} />
@@ -309,7 +330,7 @@ export default function GovTender() {
         </div>
         <button
           onClick={runCheckQualification}
-          disabled={qualLoading}
+          disabled={qualLoading || govManualMode}
           className="flex items-center gap-2 rounded bg-pillar4 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           <FileCheck className={`w-4 h-4 ${qualLoading ? "animate-pulse" : ""}`} />
@@ -428,7 +449,7 @@ export default function GovTender() {
         </div>
         <button
           onClick={runOptimalBid}
-          disabled={bidLoading}
+          disabled={bidLoading || govManualMode}
           className="flex items-center gap-2 rounded bg-pillar4 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           <TrendingUp className={`w-4 h-4 ${bidLoading ? "animate-pulse" : ""}`} />
@@ -542,7 +563,7 @@ export default function GovTender() {
         </div>
         <button
           onClick={runGenerateProposal}
-          disabled={propLoading}
+          disabled={propLoading || govManualMode}
           className="flex items-center gap-2 rounded bg-pillar4 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           <FileText className={`w-4 h-4 ${propLoading ? "animate-pulse" : ""}`} />

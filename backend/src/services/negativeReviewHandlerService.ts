@@ -62,7 +62,8 @@ function gpt4GenerateResponse(
   return templates[key] || templates.apologetic;
 }
 
-export function handleNegativeReview(review: NegativeReviewInput): HandleNegativeReviewResult {
+/** @param _orgId scope for future org-specific handling */
+export function handleNegativeReview(review: NegativeReviewInput, _orgId?: string, _countryCode?: string): HandleNegativeReviewResult {
   const severity = assessSeverity(review);
 
   if (severity === "low") {

@@ -2,6 +2,7 @@
  * Buyer Profile: 상세 바이어 프로필
  * 기본정보, 구매패턴, 매칭점수, AI 추천 전략, 이메일 초안
  */
+import { getCountryB2BMetadata } from "../data/b2bRegionMetadata.js";
 
 export interface BuyerProfile {
   companyName: string;
@@ -11,6 +12,8 @@ export interface BuyerProfile {
   yearsActive: number;
   employees: string;
   website: string;
+  /** B2B 지역 메타 기반 결제 조건 추천 */
+  paymentSuggestion?: string;
   purchasePattern: {
     mainImports: { name: string; hs: string; percent: number }[];
     annualImportUsd: string;
@@ -40,14 +43,8 @@ export interface BuyerProfile {
 }
 
 const COUNTRY_EMOJI: Record<string, string> = {
-  DE: "🇩🇪",
-  US: "🇺🇸",
-  CN: "🇨🇳",
-  TW: "🇹🇼",
-  KR: "🇰🇷",
-  JP: "🇯🇵",
-  GB: "🇬🇧",
-  VN: "🇻🇳",
+  DE: "🇩🇪", US: "🇺🇸", CN: "🇨🇳", TW: "🇹🇼", KR: "🇰🇷", JP: "🇯🇵", GB: "🇬🇧", VN: "🇻🇳",
+  AE: "🇦🇪", SA: "🇸🇦", MX: "🇲🇽", BR: "🇧🇷", IN: "🇮🇳", SG: "🇸🇬", PA: "🇵🇦", EG: "🇪🇬", ZA: "🇿🇦", NL: "🇳🇱", FR: "🇫🇷", IT: "🇮🇹", ES: "🇪🇸",
 };
 
 function getEmoji(countryCode: string): string {
@@ -60,10 +57,12 @@ export function getBuyerProfile(buyerId?: string, companyName?: string, country?
   const isAbc = id.includes("abc") || name.toLowerCase().includes("abc") || name === "";
 
   if (isAbc || (!id && !name)) {
+    const deMeta = getCountryB2BMetadata("DE");
     return {
       companyName: "ABC Trading Co., Ltd.",
       country: "Germany",
       countryEmoji: "🇩🇪",
+      paymentSuggestion: deMeta ? `해당 지역 선호: ${deMeta.payment_preference} · 한·FTA 적용 가능` : undefined,
       founded: "2008년",
       yearsActive: 18,
       employees: "50-200명",
@@ -137,11 +136,19 @@ Best regards,
   const countryCode = (country || "DE").toUpperCase().slice(0, 2);
   const displayName = name || `Buyer ${buyerId || "Unknown"}`;
   const years = 10 + (buyerId ? parseInt(buyerId.replace(/\D/g, "1").slice(0, 2), 10) % 15 : 5);
+  const b2bMeta = getCountryB2BMetadata(countryCode);
+  const paymentSuggestion = b2bMeta ? `해당 지역 선호: ${b2bMeta.payment_preference}${b2bMeta.fta_with_kr ? " · 한·FTA 적용 가능" : ""}` : undefined;
+
+  const countryNames: Record<string, string> = {
+    DE: "Germany", US: "USA", JP: "Japan", CN: "China", KR: "South Korea", GB: "UK", VN: "Vietnam",
+    AE: "UAE", SA: "Saudi Arabia", MX: "Mexico", BR: "Brazil", IN: "India", SG: "Singapore", PA: "Panama", EG: "Egypt", ZA: "South Africa", NL: "Netherlands", FR: "France", IT: "Italy", ES: "Spain",
+  };
 
   return {
     companyName: displayName,
-    country: countryCode === "DE" ? "Germany" : countryCode === "US" ? "USA" : countryCode,
+    country: countryNames[countryCode] ?? countryCode,
     countryEmoji: getEmoji(countryCode),
+    paymentSuggestion,
     founded: `${new Date().getFullYear() - years}년`,
     yearsActive: years,
     employees: "50-200명",

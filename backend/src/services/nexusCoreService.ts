@@ -1,9 +1,14 @@
 /**
- * NEXUS Core: 4 Pillar 오케스트레이션
+ * YuantO Core: 4 Pillar 오케스트레이션
  * - daily_routine: 매일 자동 실행 스케줄
  * - handle_user_request: 의도 분류 → Pillar 라우팅 → 응답 포맷
  * - proactive_alerts: 시장 기회 / 재고 / 입찰 마감 / 부정 리뷰 알림
  */
+
+import {
+  recordRoutineRunStart,
+  recordRoutineRunFinish,
+} from "./nexusRoutineRunsService.js";
 
 export interface DailyRoutineResult {
   schedule: Record<string, string>;
@@ -82,10 +87,112 @@ export function getDailyRoutine(): DailyRoutineResult {
   };
 }
 
-export function runDailyRoutineTask(taskKey: string): { status: string; message?: string } {
+export async function getDailyRoutineAsync(): Promise<DailyRoutineResult & { last_runs?: Record<string, { status: string; finished_at?: string; message?: string }> }> {
+  const { getLastRunsPerTask } = await import("./nexusRoutineRunsService.js");
+  const lastRuns = await getLastRunsPerTask();
+  const last_runs: Record<string, { status: string; finished_at?: string; message?: string }> = {};
+  for (const [taskTime, run] of Object.entries(lastRuns)) {
+    last_runs[taskTime] = {
+      status: run.status,
+      finished_at: run.finished_at,
+      message: run.message,
+    };
+  }
+  return {
+    schedule: DAILY_SCHEDULE,
+    last_run: new Date().toISOString(),
+    run_results: undefined,
+    last_runs,
+  };
+}
+
+export async function runDailyRoutineTask(taskKey: string): Promise<{ status: string; message?: string; details?: Record<string, unknown> }> {
   const task = DAILY_SCHEDULE[taskKey];
   if (!task) return { status: "error", message: "Unknown task" };
-  return { status: "ok", message: `Task ${task} executed (stub)` };
+
+  const runId = await recordRoutineRunStart(taskKey, task);
+  try {
+    let result: { status: string; message?: string; details?: Record<string, unknown> };
+    if (task === "inventory_sync") {
+      const { runB2cInventorySyncTask } = await import("./b2cRoutineTasks.js");
+      const out = await runB2cInventorySyncTask();
+      result = { status: out.status, message: out.message, details: out.details };
+    } else if (task === "price_optimization") {
+      const { runB2cPriceOptimizationTask } = await import("./b2cRoutineTasks.js");
+      const out = await runB2cPriceOptimizationTask();
+      result = { status: out.status, message: out.message, details: out.details };
+    } else if (task === "churn_prevention_check") {
+      const { runB2cChurnPreventionTask } = await import("./b2cRoutineTasks.js");
+      const out = await runB2cChurnPreventionTask();
+      result = { status: out.status, message: out.message, details: out.details };
+    } else if (task === "market_intel_update") {
+      const { runDataRefreshBatch } = await import("./nexusRoutineBatches.js");
+      const out = await runDataRefreshBatch();
+      result = { status: out.status, message: out.message, details: out.details };
+    } else if (task === "competitor_monitoring") {
+      const { runMonitoringBatch } = await import("./nexusRoutineBatches.js");
+      const out = await runMonitoringBatch();
+      result = { status: out.status, message: out.message, details: out.details };
+    } else if (task === "tender_monitoring") {
+      const { runTenderCheckBatch } = await import("./nexusRoutineBatches.js");
+      const out = await runTenderCheckBatch();
+      result = { status: out.status, message: out.message, details: out.details };
+    } else if (task === "generate_daily_report") {
+      const { runDailyReportBatch } = await import("./nexusRoutineBatches.js");
+      const out = await runDailyReportBatch();
+      result = { status: out.status, message: out.message, details: out.details };
+    } else if (task === "midday_performance_check") {
+      const { runMiddayCheckBatch } = await import("./nexusRoutineBatches.js");
+      const out = await runMiddayCheckBatch();
+      result = { status: out.status, message: out.message, details: out.details };
+    } else if (task === "eod_summary") {
+      const { runEodSummaryBatch } = await import("./nexusRoutineBatches.js");
+      const out = await runEodSummaryBatch();
+      result = { status: out.status, message: out.message, details: out.details };
+    } else {
+      result = { status: "ok", message: `Task ${task} executed (stub)` };
+    }
+    if (runId) {
+      await recordRoutineRunFinish(
+        runId,
+        result.status === "error" ? "error" : "success",
+        result.message,
+        result.details
+      );
+    }
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (runId) await recordRoutineRunFinish(runId, "error", message, undefined);
+    throw err;
+  }
+}
+
+/** 재시도 옵션 (스케줄러용) */
+const ROUTINE_RETRY_ATTEMPTS = 3;
+const ROUTINE_RETRY_BACKOFF_MS = 5000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 스케줄러에서 사용: 최대 3회 재시도 후 실패 시 기록·throw */
+export async function runDailyRoutineTaskWithRetry(taskKey: string): Promise<{ status: string; message?: string; details?: Record<string, unknown> }> {
+  let lastResult: { status: string; message?: string; details?: Record<string, unknown> } = { status: "error", message: "No attempt" };
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= ROUTINE_RETRY_ATTEMPTS; attempt++) {
+    try {
+      const result = await runDailyRoutineTask(taskKey);
+      lastResult = result;
+      if (result.status !== "error") return result;
+      lastError = new Error(result.message ?? "Task returned error");
+    } catch (err) {
+      lastError = err;
+      lastResult = { status: "error", message: err instanceof Error ? err.message : String(err) };
+    }
+    if (attempt < ROUTINE_RETRY_ATTEMPTS) await sleep(ROUTINE_RETRY_BACKOFF_MS);
+  }
+  throw lastError ?? new Error(lastResult.message);
 }
 
 export function handleUserRequest(input: HandleRequestInput): HandleRequestResult {
@@ -160,5 +267,21 @@ export function getProactiveAlerts(): ProactiveAlertsResult {
   return {
     alerts,
     generated_at: new Date().toISOString(),
+  };
+}
+
+export async function getProactiveAlertsAsync(): Promise<ProactiveAlertsResult> {
+  const base = getProactiveAlerts();
+  const { getTodayFailedRuns } = await import("./nexusRoutineRunsService.js");
+  const failed = await getTodayFailedRuns();
+  const extra: Alert[] = failed.map((r) => ({
+    type: "routine_failure",
+    priority: "urgent",
+    message: `Daily routine failed: ${r.task_time} ${r.task_name} — ${r.message ?? "error"}`,
+    action: "Check run history or run again from Dashboard",
+  }));
+  return {
+    alerts: [...extra, ...base.alerts],
+    generated_at: base.generated_at,
   };
 }

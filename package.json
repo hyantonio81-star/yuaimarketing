@@ -2,17 +2,26 @@
   "name": "nexus-ai",
   "private": true,
   "version": "0.1.0",
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
+  "type": "module",
+  "engines": { "node": ">=18.x <=20.x" },
+  "workspaces": ["frontend", "backend", "landing"],
+  "overrides": {
+    "tar": ">=6.2.2",
+    "glob": ">=10.4.5",
+    "rimraf": ">=5.0.0"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm run dev",
+    "dev:landing": "cd landing && npm run dev",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "build": "npm run build -w backend && npm run build -w frontend"
+    "build": "cd backend && npm run build && cd ../frontend && npm run build",
+    "start": "npm run build && npm run start:server",
+    "start:server": "node scripts/start-server.js",
+    "check-setup": "node scripts/check-setup.js",
+    "vercel:set-root": "node scripts/vercel-set-root.js"
   },
   "devDependencies": {
     "@vercel/node": "^3.2.0",

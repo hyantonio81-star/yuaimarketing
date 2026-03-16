@@ -1,0 +1,20 @@
+{
+  "default": {
+    "interestKeywords": [
+      "건강",
+      "이야기"
+    ],
+    "voiceGender": "female",
+    "voiceAge": "young",
+    "voiceTone": "friendly",
+    "voiceSpeed": 1,
+    "voicePitch": "medium",
+    "format": "shorts",
+    "characterAge": "young",
+    "characterGender": "neutral",
+    "noBgm": false,
+    "bgmGenre": "default",
+    "bgmVolume": 0.15,
+    "autoUpload": true
+  }
+}

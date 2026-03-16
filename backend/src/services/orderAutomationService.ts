@@ -82,7 +82,8 @@ function calculateDeliveryDate(_order: OrderInput): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function processOrderAuto(order: OrderInput): ProcessOrderResult {
+/** @param _orgId scope for future DB/org-specific logic */
+export function processOrderAuto(order: OrderInput, _orgId?: string, _countryCode?: string): ProcessOrderResult {
   const steps: ProcessOrderResult["steps"] = {
     fraud_check: { score: 0, passed: true },
     inventory_reserved: false,

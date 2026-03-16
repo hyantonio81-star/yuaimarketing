@@ -15,6 +15,15 @@ export interface MarketScoreResult {
   total: number;
   breakdown: ScoreBreakdown[];
   formula: string;
+  /** 실데이터(Comtrade 등) 반영 시 표시 */
+  data_source_note?: string;
+}
+
+export interface MarketScoreOptions {
+  /** 시장 규모(USD) 오버라이드 — 제공 시 시장 규모·성장률 항목에 반영 */
+  marketSizeOverride?: number;
+  country?: string;
+  hs_code?: string;
 }
 
 // Stub: TAM/SAM/SOM → 시장 규모 (USD)
@@ -75,13 +84,14 @@ function simpleHash(str: string): number {
 }
 
 /**
- * 시장성 점수 계산 (0-100)
+ * 시장성 점수 계산 (0-100). options.marketSizeOverride 있으면 해당 값(USD)으로 시장 규모 반영
  */
-export function marketScore(item: string): MarketScoreResult {
+export function marketScore(item: string, options?: MarketScoreOptions): MarketScoreResult {
   const trimItem = (item || "default").trim() || "default";
+  const marketSizeOverride = options?.marketSizeOverride;
 
   // 1. 시장 규모 & 성장률 (25점)
-  const marketSize = getTamSamSom(trimItem);
+  const marketSize = marketSizeOverride ?? getTamSamSom(trimItem);
   const growthRate = predictCagr5Years(trimItem);
   const sizeScore = Math.min((marketSize / 1_000_000_000) * 15, 15);
   const growthScore = Math.min(growthRate * 100, 10);
@@ -116,7 +126,9 @@ export function marketScore(item: string): MarketScoreResult {
       category: "시장 규모 & 성장률",
       maxPoints: 25,
       score: Math.round((sizeScore + growthScore) * 10) / 10,
-      detail: `TAM ${(marketSize / 1e9).toFixed(2)}B, CAGR ${(growthRate * 100).toFixed(1)}%`,
+      detail: marketSizeOverride != null
+        ? `무역 규모(Comtrade) 약 $${(marketSize / 1e6).toFixed(0)}M, CAGR ${(growthRate * 100).toFixed(1)}%`
+        : `TAM ${(marketSize / 1e9).toFixed(2)}B, CAGR ${(growthRate * 100).toFixed(1)}%`,
     },
     {
       category: "경쟁 강도 (낮을수록 좋음)",
@@ -150,5 +162,6 @@ export function marketScore(item: string): MarketScoreResult {
     breakdown,
     formula:
       "size_score(15) + growth_score(10) + competition(20) + barrier(15) + margin(25) + momentum(15) = 100",
+    ...(marketSizeOverride != null && { data_source_note: "시장 규모는 UN Comtrade 무역통계 기반 반영" }),
   };
 }
