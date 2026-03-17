@@ -6,7 +6,8 @@
  * 토큰 발급: https://vercel.com/account/tokens
  */
 const PROJECT_ID = "prj_pSDwd60OjCnRlcw09ApsFfmXWJft";
-const ROOT_DIRECTORY = "Music/Mark01/nexus-ai";
+/** 저장소 루트 = nexus-ai (yuaimarketing). 비우면 Vercel이 repo root 사용 */
+const ROOT_DIRECTORY = null;
 
 const token = process.env.VERCEL_TOKEN;
 if (!token) {
@@ -38,7 +39,7 @@ async function main() {
     process.exit(1);
   }
   console.log("설정 완료:");
-  console.log("  Root Directory:", data.rootDirectory ?? ROOT_DIRECTORY);
+  console.log("  Root Directory:", data.rootDirectory ?? "(repo root)");
   console.log("  Build Command:", data.buildCommand ?? body.buildCommand);
   console.log("  Output Directory:", data.outputDirectory ?? body.outputDirectory);
   console.log("  Node.js Version:", data.nodeVersion ?? body.nodeVersion);
