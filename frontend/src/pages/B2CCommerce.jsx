@@ -75,7 +75,7 @@ export default function B2CCommerce() {
           {hasConnection && (
             <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary/10 text-primary text-sm">
               <CheckCircle className="w-4 h-4" />
-              {connections.map((c) => (c.channel === "shopify" ? "Shopify" : c.channel)).join(", ")} {t("ecommerce.connected")}
+              {connections.filter(Boolean).map((c) => (c?.channel === "shopify" ? "Shopify" : c?.channel || "")).filter(Boolean).join(", ")} {t("ecommerce.connected")}
             </span>
           )}
         </div>
@@ -132,7 +132,7 @@ export default function B2CCommerce() {
         {pendingCount > 0 && (
           <div className="mt-3 flex items-center gap-2 text-sm">
             <ClipboardList className="w-4 h-4 text-amber-500" />
-            <span className="text-foreground">{t("b2cCommerce.pendingApprovalsCount").replace("{count}", String(pendingCount))}</span>
+            <span className="text-foreground">{(typeof t("b2cCommerce.pendingApprovalsCount") === "string" ? t("b2cCommerce.pendingApprovalsCount") : "승인 대기 {count}건").replace("{count}", String(pendingCount))}</span>
           </div>
         )}
       </SectionCard>

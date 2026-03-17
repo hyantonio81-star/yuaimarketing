@@ -35,7 +35,7 @@ export default function InventorySyncSection({ connectedChannels = [] }) {
     }
   };
 
-  const connectedNames = (connectedChannels || []).map((c) => (c.channel === "shopify" ? "Shopify" : c.channel));
+  const connectedNames = (connectedChannels || []).filter(Boolean).map((c) => (c?.channel === "shopify" ? "Shopify" : c?.channel || ""));
 
   return (
     <SectionCard title={t("b2cCommerce.inventorySyncTitle")} className="mb-6">

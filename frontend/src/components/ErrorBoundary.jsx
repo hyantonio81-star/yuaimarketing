@@ -24,13 +24,20 @@ export default class ErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
-      const message = this.props.fallbackMessage ?? "문제가 발생했습니다. 새로고침 후 다시 시도해 주세요.";
+      const fallback = "문제가 발생했습니다. 새로고침 후 다시 시도해 주세요.";
+      const message = this.props.fallbackMessage ?? fallback;
+      const errMsg = this.state.error?.message || this.state.error?.toString?.();
       return (
         <div className="min-h-[40vh] flex items-center justify-center p-8 relative z-[100] bg-background">
           <div className="max-w-md w-full rounded-lg border border-destructive/30 bg-card p-6 text-center shadow-lg">
             <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-3" aria-hidden />
             <h2 className="text-lg font-semibold text-foreground mb-2">오류가 발생했습니다</h2>
             <p className="text-sm text-muted-foreground mb-4">{message}</p>
+            {errMsg && (
+              <p className="text-xs text-muted-foreground mb-4 font-mono break-all text-left bg-muted/50 p-2 rounded" title={errMsg}>
+                {errMsg}
+              </p>
+            )}
             <button
               type="button"
               onClick={this.handleRetry}

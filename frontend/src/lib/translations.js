@@ -230,6 +230,14 @@ export const translations = {
       lastSignIn: "최근 로그인",
       noUsers: "사용자가 없습니다.",
     },
+    setup: {
+      title: "최초 운영자 등록",
+      subtitle: "보안을 위해 첫 관리자 계정을 등록하세요. 한 번만 가능합니다.",
+      goLogin: "이미 계정이 있으면 로그인",
+      notAllowedTitle: "등록 불가",
+      notAllowedDesc: "이미 운영자가 등록되었거나 설정이 비활성화되었습니다. 로그인하세요.",
+      redirectToLogin: "로그인 페이지로 이동합니다…",
+    },
     common: {
       language: "언어",
       refresh: "새로고침",
@@ -1222,6 +1230,14 @@ export const translations = {
       lastSignIn: "Last sign-in",
       noUsers: "No users.",
     },
+    setup: {
+      title: "Register first operator",
+      subtitle: "For security, register the first admin account. This can only be done once.",
+      goLogin: "Already have an account? Sign in",
+      notAllowedTitle: "Registration not available",
+      notAllowedDesc: "An operator is already registered or setup is disabled. Please sign in.",
+      redirectToLogin: "Redirecting to sign in…",
+    },
     common: {
       language: "Language",
       refresh: "Refresh",
@@ -2210,6 +2226,14 @@ export const translations = {
       createdAt: "Creado",
       lastSignIn: "Último acceso",
       noUsers: "No hay usuarios.",
+    },
+    setup: {
+      title: "Registrar primer operador",
+      subtitle: "Por seguridad, registre la primera cuenta de administrador. Solo se puede hacer una vez.",
+      goLogin: "¿Ya tiene cuenta? Iniciar sesión",
+      notAllowedTitle: "Registro no disponible",
+      notAllowedDesc: "Ya hay un operador registrado o la configuración está desactivada. Inicie sesión.",
+      redirectToLogin: "Redirigiendo al inicio de sesión…",
     },
     common: {
       language: "Idioma",

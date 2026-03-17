@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Shield, Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
+import { adminApi } from "../lib/api.js";
 
 export default function Login() {
   const { t } = useLanguage();
@@ -13,8 +14,14 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [setupAllowed, setSetupAllowed] = useState(false);
+
+  useEffect(() => {
+    adminApi.getBootstrapStatus().then((data) => setSetupAllowed(data.allowed === true)).catch(() => {});
+  }, []);
 
   const from = location.state?.from?.pathname || "/";
+  const setupSuccess = location.state?.message === "setup_success";
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -40,6 +47,11 @@ export default function Login() {
           <h1 className="text-xl font-bold text-primary">{t("appName")}</h1>
         </div>
         <p className="text-sm text-muted-foreground mb-6">{t("auth.signInTitle")}</p>
+        {setupSuccess && (
+          <p className="mb-4 p-3 rounded-md bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-400 text-sm" role="status">
+            {t("admin.bootstrapSuccess")}
+          </p>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-foreground mb-1">
@@ -85,6 +97,14 @@ export default function Login() {
             <Link to="/register" className="text-primary hover:underline">
               {t("auth.signUp")}
             </Link>
+            {setupAllowed && (
+              <>
+                {" · "}
+                <Link to="/setup" className="text-amber-600 dark:text-amber-400 hover:underline">
+                  {t("setup.title")}
+                </Link>
+              </>
+            )}
           </p>
         </form>
         <div className="mt-6 pt-4 border-t border-border flex items-center gap-2 text-xs text-muted-foreground">

@@ -19,6 +19,7 @@
 - **Shorts 레이트 리밋**: `/api/shorts`에 `checkRateLimitApi` 적용. IP당 1분 120회 초과 시 429.
 - **Content-Automation 인증·레이트 리밋**: `/api/content-automation/*` 로그인 필수 + 동일 레이트 리밋.
 - **Admin bootstrap 프로덕션 기본 비활성화**: `VERCEL=1` 또는 `NODE_ENV=production`이면 bootstrap은 `ADMIN_BOOTSTRAP_ENABLED=true`로 명시할 때만 허용. 첫 admin 생성 후 `ADMIN_BOOTSTRAP_ENABLED=false` 설정 권장.
+- **최초 운영자 등록**: 로그인 없이 `/setup`에서 첫 관리자 계정을 등록할 수 있음. (bootstrap 허용 시에만 표시. 로그인 페이지에 "최초 운영자 등록" 링크 노출.)
 - **YouTube 토큰 암호화 영속화**: `YOUTUBE_TOKEN_ENCRYPTION_KEY`(64자 hex 또는 16자 이상 비밀문자) 설정 시 `data/youtube-tokens.enc`에 AES-256-GCM 암호화하여 저장. 재시작 후 복원되며, 미설정 시 기존처럼 메모리만 사용.
 - **CORS**: 환경 변수 `ALLOWED_ORIGINS`가 설정되면 해당 목록(쉼표 구분)만 허용. 미설정 시 `origin: true`. `methods`·`allowedHeaders`(Content-Type, Authorization, X-Organization-Id, X-Country) 명시.
 
