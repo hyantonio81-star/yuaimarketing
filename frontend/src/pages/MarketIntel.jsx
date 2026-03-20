@@ -152,7 +152,9 @@ export default function MarketIntel() {
     let cancelled = false;
     marketIntelApi.getReportOptions(reportOptions.language).then((r) => {
       if (!cancelled && r?.sections) setReportMeta((prev) => ({ ...prev, sections: r.sections }));
-    }).catch(() => {});
+    }).catch((e) => {
+      if (!cancelled) setError(typeof (e?.apiMessage ?? e?.message) === "string" ? (e.apiMessage ?? e.message) : t("marketIntel.loadFailed"));
+    });
     return () => { cancelled = true; };
   }, [reportOptions.language]);
 
@@ -169,14 +171,20 @@ export default function MarketIntel() {
   useEffect(() => {
     marketIntelApi.getEnabledPaidSources("default").then((r) => {
       setEnabledPaidSourceIds(r?.enabled_paid_source_ids ?? []);
-    }).catch(() => setEnabledPaidSourceIds([]));
+    }).catch((e) => {
+      setEnabledPaidSourceIds([]);
+      setError(typeof (e?.apiMessage ?? e?.message) === "string" ? (e.apiMessage ?? e.message) : t("marketIntel.loadFailed"));
+    });
   }, []);
 
   useEffect(() => {
     const lang = reportOptions.language || uiLanguage || "ko";
     marketIntelApi.getReportTierOptions(lang).then((r) => {
       setReportTierOptions(r?.options ?? []);
-    }).catch(() => setReportTierOptions([]));
+    }).catch((e) => {
+      setReportTierOptions([]);
+      setError(typeof (e?.apiMessage ?? e?.message) === "string" ? (e.apiMessage ?? e.message) : t("marketIntel.loadFailed"));
+    });
   }, [reportOptions.language, uiLanguage]);
 
   useEffect(() => {
@@ -198,7 +206,7 @@ export default function MarketIntel() {
           research_types: req.research_types ?? [],
         });
       }
-    }).catch(() => {});
+    }).catch((e) => setError(typeof (e?.apiMessage ?? e?.message) === "string" ? (e.apiMessage ?? e.message) : t("marketIntel.loadFailed")));
   }, [uiLanguage]);
 
   const effectiveNewsCountry = newsSummaryCountry || currentCountryCode || getCurrentCountryCode();
@@ -210,7 +218,13 @@ export default function MarketIntel() {
     }
     const lang = reportOptions.language || uiLanguage || "ko";
     const categories = (newsInterestCategories ?? []).length ? (newsInterestCategories ?? []) : undefined;
-    marketIntelApi.getNewsSummary(effectiveNewsCountry, lang, categories ? { categories } : undefined).then((r) => setNewsItems(r?.items ?? [])).catch(() => setNewsItems([]));
+    marketIntelApi
+      .getNewsSummary(effectiveNewsCountry, lang, categories ? { categories } : undefined)
+      .then((r) => setNewsItems(r?.items ?? []))
+      .catch((e) => {
+        setNewsItems([]);
+        setError(typeof (e?.apiMessage ?? e?.message) === "string" ? (e.apiMessage ?? e.message) : t("marketIntel.loadFailed"));
+      });
   }, [effectiveNewsCountry, reportOptions.language, uiLanguage, newsInterestCategories]);
 
   useEffect(() => {
@@ -383,7 +397,7 @@ export default function MarketIntel() {
   };
   const exportFlowData = () => {
     const rows = [
-      ...(tools ?? []).map((t) => ({ type: "tool", name: t?.name ?? "", description: t?.description ?? "", step: "" })),
+      ...(tools ?? []).map((tool) => ({ type: "tool", name: tool?.name ?? "", description: tool?.description ?? "", step: "" })),
       ...(services ?? []).map((s) => ({ type: "service", name: s?.name ?? "", description: s?.description ?? "", step: String(s?.step ?? "") })),
       ...(results ?? []).map((r) => ({ type: "output", name: r?.title ?? "", description: r?.period ?? "", step: "" })),
     ];
@@ -429,7 +443,7 @@ export default function MarketIntel() {
   };
 
   return (
-    <div className="p-6 lg:p-8 min-h-[60vh] relative z-0" role="main" aria-label="시장 인텔">
+    <div className="p-6 lg:p-8 min-h-[60vh] relative z-0" role="main" aria-label={t("nav.marketIntel")}>
       <header className="mb-8">
         <h1 className="text-2xl font-bold text-foreground tracking-tight">
           {t("marketIntel.pillarTitle")}
@@ -736,7 +750,7 @@ export default function MarketIntel() {
                       <div className="font-medium text-foreground flex items-center gap-2">
                         {src.name}
                         {src.connected && (
-                          <span className="px-1.5 py-0.5 rounded text-xs bg-primary/20 text-primary" title="API 연동됨">연동</span>
+                          <span className="px-1.5 py-0.5 rounded text-xs bg-primary/20 text-primary" title={t("settings.connected")}>{t("settings.connected")}</span>
                         )}
                       </div>
                       {src.url && (
@@ -1034,6 +1048,7 @@ const resultColors = {
 };
 
 function ResultBlock({ icon: Icon, title, sub, color, actionPath, outputType }) {
+  const { t } = useLanguage();
   const SafeIcon = Icon && typeof Icon === "function" ? Icon : BarChart3;
   const hasAction = (outputType === "segmented" || outputType === "news_summary" || outputType === "report") && actionPath;
   const scrollToSection = () => {
@@ -1052,7 +1067,7 @@ function ResultBlock({ icon: Icon, title, sub, color, actionPath, outputType }) 
         <div className="text-sm text-muted-foreground">{sub != null ? String(sub) : ""}</div>
         {hasAction && (
           <button type="button" onClick={scrollToSection} className="mt-2 text-xs font-medium text-primary hover:underline">
-            보기
+            {t("common.view")}
           </button>
         )}
       </div>

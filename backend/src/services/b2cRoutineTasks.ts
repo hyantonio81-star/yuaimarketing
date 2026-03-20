@@ -5,8 +5,8 @@
 import { getConnections } from "./ecommerceConnectionsService.js";
 import { churnPreventionCampaign } from "./churnPreventionService.js";
 import { calculateOptimalPrice } from "./optimalPriceService.js";
-import { isAiAutomationEnabled } from "./b2cSettingsService.js";
-import { addPending } from "./b2cPendingApprovalsService.js";
+import { isAiAutomationEnabledAsync } from "./b2cSettingsService.js";
+import { addPendingAsync } from "./b2cPendingApprovalsService.js";
 
 const DEFAULT_ORG = "default";
 
@@ -43,9 +43,9 @@ export async function runB2cPriceOptimizationTask(): Promise<B2cTaskResult> {
       current_price: 15000,
     };
     const result = calculateOptimalPrice(product, "Coupang", DEFAULT_ORG, undefined);
-    const automationOn = isAiAutomationEnabled(DEFAULT_ORG);
+    const automationOn = await isAiAutomationEnabledAsync(DEFAULT_ORG);
     if (!automationOn && result.price_updated) {
-      addPending(DEFAULT_ORG, "price_change", {
+      await addPendingAsync(DEFAULT_ORG, "price_change", {
         sku: product.sku,
         channel: "Coupang",
         current_price: product.current_price,
@@ -76,9 +76,9 @@ export async function runB2cChurnPreventionTask(): Promise<B2cTaskResult> {
   try {
     const limit = 50;
     const result = churnPreventionCampaign(limit, DEFAULT_ORG, undefined);
-    const automationOn = isAiAutomationEnabled(DEFAULT_ORG);
+    const automationOn = await isAiAutomationEnabledAsync(DEFAULT_ORG);
     if (!automationOn && result.emails_sent > 0) {
-      addPending(DEFAULT_ORG, "winback_send", {
+      await addPendingAsync(DEFAULT_ORG, "winback_send", {
         emails_sent: result.emails_sent,
         sms_sent: result.sms_sent,
         at_risk_count: result.at_risk_count,

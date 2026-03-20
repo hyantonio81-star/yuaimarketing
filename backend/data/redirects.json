@@ -1,5 +1,7 @@
 {
-  "amazon-pick": "https://www.amazon.com",
-  "shein-dress": "https://www.shein.com",
+  "amazon-pick": "https://www.amazon.com/?tag=yuaimarketop-20",
+  "shein": "https://www.shein.com/?aff_id=yuai_marketop",
+  "shein-dress": "https://www.shein.com/?aff_id=yuai_marketop",
+  "temu": "https://www.temu.com/?aff_id=yuai_marketop",
   "links": "https://www.yuaimarketop.com/links"
 }

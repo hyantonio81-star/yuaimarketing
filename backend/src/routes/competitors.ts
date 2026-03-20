@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import { requireUser } from "../lib/auth.js";
 import {
   getAutoTracking,
   getAlgorithms,
@@ -17,6 +18,11 @@ import {
 } from "../services/competitorService.js";
 
 export async function competitorRoutes(app: FastifyInstance) {
+  app.addHook("preHandler", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user) return reply;
+  });
+
   app.get("/tracking", async () => ({ tracking: getAutoTracking() }));
   app.get("/algorithms", async () => ({ algorithms: getAlgorithms() }));
   app.get("/alerts", async () => ({ alerts: getAlerts() }));

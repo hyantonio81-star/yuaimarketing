@@ -101,7 +101,58 @@
       },
       "videoUrl": "https://www.youtube.com/shorts/stub-video-id",
       "error": "ENOENT: no such file or directory, copyfile 'C:\\Users\\ANTONI~1\\AppData\\Local\\Temp\\shorts-edit-siszAe\\stub.mp4' -> 'C:\\Users\\ANTONIO YU\\Videos\\Yuanto-Market Intel\\nexus-ai\\backend\\data\\shorts\\job-1773357540800-1014437731\\final.mp4'"
+    },
+    {
+      "jobId": "job-1774016560470-2068797592",
+      "status": "failed",
+      "createdAt": "2026-03-20T14:22:40.470Z",
+      "updatedAt": "2026-03-20T14:22:43.557Z",
+      "topic": {
+        "id": "stub-1",
+        "keyword": "Shorts",
+        "title": "YouTube Shorts 트렌드 예시",
+        "summary": "에이전트가 트렌드를 수집한 뒤 스크립트·이미지·영상을 생성합니다.",
+        "source": "manual",
+        "score": 60
+      },
+      "script": {
+        "topicId": "stub-1",
+        "topicTitle": "YouTube Shorts 트렌드 예시",
+        "hook": "YouTube Shorts 트렌드 예시 지금 이슈에요.",
+        "character": {
+          "name": "쇼츠봇",
+          "description": "미니멀 일러스트 캐릭터, 한 줄 요약 톤",
+          "tone": "친근한 반말",
+          "imagePromptHint": "minimal flat illustration, friendly character, pastel background"
+        },
+        "scenes": [
+          {
+            "sceneIndex": 1,
+            "text": "YouTube Shorts 트렌드 예시 지금 이슈에요.",
+            "imagePrompt": "minimal flat illustration, friendly character, pastel background, text: \"YouTube Shorts 트렌드 예\"",
+            "durationSeconds": 3
+          },
+          {
+            "sceneIndex": 2,
+            "text": "에이전트가 트렌드를 수집한 뒤 스크립트·이미지·영상을 생성합니다.",
+            "imagePrompt": "minimal flat illustration, friendly character, pastel background, topic summary",
+            "durationSeconds": 4
+          },
+          {
+            "sceneIndex": 3,
+            "text": "더 자세한 내용은 링크에서 확인해 주세요.",
+            "imagePrompt": "minimal flat illustration, friendly character, pastel background, CTA",
+            "durationSeconds": 2
+          }
+        ],
+        "totalDurationSeconds": 9
+      },
+      "deployedUrls": {
+        "youtube": "https://www.youtube.com/shorts/stub-video-id"
+      },
+      "videoUrl": "https://www.youtube.com/shorts/stub-video-id",
+      "error": "ENOENT: no such file or directory, copyfile 'C:\\Users\\ANTONI~1\\AppData\\Local\\Temp\\shorts-edit-d6w816\\stub.mp4' -> 'C:\\Users\\ANTONIO YU\\Videos\\Yuanto-Market Intel\\nexus-ai\\backend\\data\\shorts\\job-1774016560470-2068797592\\final.mp4'"
     }
   ],
-  "updatedAt": "2026-03-12T23:19:02.007Z"
+  "updatedAt": "2026-03-20T14:22:43.558Z"
 }

@@ -1,10 +1,11 @@
 /**
  * 채널별 Shorts 기본 설정 (YouTube 등 계정별)
- * GET/PUT /api/shorts/channels/:channelKey/defaults
+ * 저장: data/shorts_channel_defaults.json(폴백) 및 Supabase(shorts_channel_defaults)
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 
 export interface ShortsChannelDefaults {
   language?: string;
@@ -34,7 +35,7 @@ function getDefaultsPath(): string {
 
 let cache: Record<string, ShortsChannelDefaults> = {};
 
-async function load(): Promise<Record<string, ShortsChannelDefaults>> {
+async function loadFallback(): Promise<Record<string, ShortsChannelDefaults>> {
   const path = getDefaultsPath();
   if (!existsSync(path)) return {};
   try {
@@ -47,7 +48,36 @@ async function load(): Promise<Record<string, ShortsChannelDefaults>> {
   return {};
 }
 
+async function load(): Promise<Record<string, ShortsChannelDefaults>> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("shorts_settings_store")
+      .select("defaults")
+      .eq("id", "current")
+      .maybeSingle();
+    
+    if (!error && data && data.defaults) {
+      return data.defaults as Record<string, ShortsChannelDefaults>;
+    }
+  }
+  return loadFallback();
+}
+
 async function save(data: Record<string, ShortsChannelDefaults>): Promise<void> {
+  const now = new Date().toISOString();
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase
+      .from("shorts_settings_store")
+      .upsert({ id: "current", defaults: data, updated_at: now }, { onConflict: "id" });
+    
+    if (!error) {
+      cache = { ...data };
+      return;
+    }
+  }
+
   const path = getDefaultsPath();
   const dir = join(path, "..");
   if (!existsSync(dir)) {

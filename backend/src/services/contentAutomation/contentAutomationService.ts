@@ -19,6 +19,7 @@ import { publishToThreads, canPublishNow } from "../threadsCommerce/threadsPubli
 import { fetchProductsByMarketplace } from "../threadsCommerce/threadsCommerceService.js";
 import { buildAffiliateProductUrl, type AffiliateConfig } from "../threadsCommerce/affiliateUrl.js";
 import type { MarketplaceId } from "../threadsCommerce/types.js";
+import { appendFromCommerce } from "../../lib/drProductsStore.js";
 
 const defaultSettings: ContentAutomationSettings = {
   enableBlog: false,
@@ -240,6 +241,15 @@ export async function runContentAutomationPipeline(
           marketplace: productForPipeline.marketplace,
         });
         if (threadResult.ok && threadResult.url) snsPostUrl = threadResult.url;
+      }
+    }
+
+    // 5) 옵션: 선정 상품을 랜딩 Tienda(dr-products)에 동기화
+    if (settings.syncToDrProducts) {
+      try {
+        await appendFromCommerce(productForPipeline);
+      } catch {
+        // 실패 시 파이프라인 결과는 그대로 반환
       }
     }
 

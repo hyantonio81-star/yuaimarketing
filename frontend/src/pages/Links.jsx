@@ -1,54 +1,19 @@
 import { Link } from "react-router-dom";
+import { useEffect } from "react";
 import { ShoppingBag, FileText, Share2, Mail, ExternalLink } from "lucide-react";
+import { useLanguage } from "../context/LanguageContext";
 
-const LINK_SECTIONS = [
-  {
-    id: "shopping",
-    title: "쇼핑",
-    items: [
-      { label: "Amazon 추천", href: "/api/go/amazon-pick", thumb: "🛒" },
-      { label: "Shein", href: "/api/go/shein-dress", thumb: "👗" },
-      { label: "추천 상품 더보기", href: "/links#shopping", thumb: "✨" },
-    ],
-  },
-  {
-    id: "content",
-    title: "콘텐츠",
-    items: [
-      { label: "시장 인사이트", href: "/landing", thumb: "📊" },
-      { label: "블로그", href: "/links#blog", thumb: "📝" },
-    ],
-  },
-  {
-    id: "sns",
-    title: "SNS",
-    items: [
-      { label: "Instagram", href: "https://instagram.com", thumb: "📷", external: true },
-      { label: "Threads", href: "https://threads.net", thumb: "🧵", external: true },
-      { label: "Facebook", href: "https://facebook.com", thumb: "👍", external: true },
-    ],
-  },
-  {
-    id: "contact",
-    title: "문의",
-    items: [
-      { label: "이메일 문의", href: "mailto:hyantonio81@gmail.com", thumb: "✉️", external: true },
-    ],
-  },
-];
+// 터치 타겟 최소 48px, 모바일 safe-area 반영
+const cardClass = "flex items-center gap-4 w-full min-h-[56px] rounded-xl border-2 border-border bg-card p-4 text-left transition-all duration-200 hover:border-primary hover:bg-primary/10 hover:scale-[1.02] active:scale-[0.99] [touch-action:manipulation]";
 
-function LinkCard({ item, baseUrl }) {
+function LinkCard({ item }) {
   const isExternal = item.external || item.href.startsWith("http") || item.href.startsWith("mailto:");
-  const isApiGo = item.href.startsWith("/api/go/");
-  const url = isApiGo ? `${baseUrl}${item.href}` : item.href;
-  const isInternal = !isExternal && !isApiGo;
+  const isGo = item.isGo || item.href.startsWith("/go/");
+  const isInternal = !isExternal && !isGo;
 
   if (isInternal) {
     return (
-      <Link
-        to={item.href}
-        className="flex items-center gap-4 w-full rounded-xl border-2 border-border bg-card p-4 text-left hover:border-primary hover:bg-primary/10 transition-colors"
-      >
+      <Link to={item.href} className={cardClass}>
         <span className="text-3xl w-12 h-12 flex items-center justify-center rounded-lg bg-muted shrink-0">
           {item.thumb}
         </span>
@@ -59,11 +24,13 @@ function LinkCard({ item, baseUrl }) {
       </Link>
     );
   }
+  // /go/xxx 또는 외부: <a>로 이동 (/go는 Vercel에서 API로 rewrite됨)
   return (
-    <button
-      type="button"
-      onClick={() => { window.location.href = url; }}
-      className="flex items-center gap-4 w-full rounded-xl border-2 border-border bg-card p-4 text-left hover:border-primary hover:bg-primary/10 transition-colors"
+    <a
+      href={item.href}
+      target={isExternal ? "_blank" : undefined}
+      rel={isExternal ? "noopener noreferrer" : undefined}
+      className={cardClass}
     >
       <span className="text-3xl w-12 h-12 flex items-center justify-center rounded-lg bg-muted shrink-0">
         {item.thumb}
@@ -72,19 +39,63 @@ function LinkCard({ item, baseUrl }) {
         <p className="font-semibold text-foreground">{item.label}</p>
       </div>
       <ExternalLink className="w-5 h-5 text-muted-foreground shrink-0" />
-    </button>
+    </a>
   );
 }
 
 export default function Links() {
-  const baseUrl = import.meta.env.VITE_API_URL || "http://localhost:4000";
+  const { t } = useLanguage();
   const sectionIcons = { shopping: ShoppingBag, content: FileText, sns: Share2, contact: Mail };
+
+  const LINK_SECTIONS = [
+    {
+      id: "shopping",
+      title: t("links.shopping"),
+      items: [
+        { label: t("links.amazonRec"), href: "/go/amazon-pick", thumb: "🛒", isGo: true },
+        { label: t("links.shein"), href: "/go/shein-dress", thumb: "👗", isGo: true },
+        { label: t("links.viewMoreProducts"), href: "/links#shopping", thumb: "✨" },
+      ],
+    },
+    {
+      id: "content",
+      title: t("links.content"),
+      items: [
+        { label: t("links.marketInsights"), href: "/landing", thumb: "📊" },
+        { label: t("links.blog"), href: "/links#blog", thumb: "📝" },
+      ],
+    },
+    {
+      id: "sns",
+      title: t("links.sns"),
+      items: [
+        { label: "Instagram", href: "https://www.instagram.com/yuaimarketop", thumb: "📷", external: true },
+        { label: "Threads", href: "https://www.threads.net/@yuaimarketop", thumb: "🧵", external: true },
+        { label: "Facebook", href: "https://www.facebook.com/yuaimarketop", thumb: "👍", external: true },
+      ],
+    },
+    {
+      id: "contact",
+      title: t("links.contact"),
+      items: [
+        { label: t("links.emailContact"), href: "mailto:hyantonio81@gmail.com", thumb: "✉️", external: true },
+      ],
+    },
+  ];
+
+  useEffect(() => {
+    document.title = t("links.pageTitle");
+    // 픽셀/GA4: 링크 허브 뷰 이벤트 발송
+    if (window.fbq) window.fbq('track', 'PageView');
+    if (window.gtag) window.gtag('event', 'page_view', { page_path: '/links', page_title: t("links.pageTitle") });
+  }, [t]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-lg mx-auto px-4 py-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-foreground tracking-tight">YUAI Marketop</h1>
-          <p className="text-sm text-muted-foreground mt-1">맞춤 링크 허브 · 인스타·Threads 바이오용</p>
+          <p className="text-sm text-muted-foreground mt-1">{t("links.subtitle")}</p>
         </div>
         <div className="space-y-8">
           {LINK_SECTIONS.map((section) => {
@@ -97,17 +108,17 @@ export default function Links() {
                 </h2>
                 <div className="space-y-3">
                   {section.items.map((item, i) => (
-                    <LinkCard key={i} item={item} baseUrl={baseUrl} />
+                    <LinkCard key={i} item={item} />
                   ))}
                 </div>
               </div>
             );
           })}
         </div>
-        <footer className="mt-12 pt-6 border-t border-border text-center text-xs text-muted-foreground">
-          <a href="mailto:hyantonio81@gmail.com" className="hover:text-foreground">hyantonio81@gmail.com</a>
+        <footer className="mt-10 sm:mt-12 pt-4 sm:pt-6 border-t border-border text-center text-xs text-muted-foreground pb-[env(safe-area-inset-bottom)]">
+          <a href="mailto:hyantonio81@gmail.com" className="hover:text-foreground transition-colors">hyantonio81@gmail.com</a>
           {" · "}
-          <Link to="/landing" className="hover:text-foreground">홈</Link>
+          <Link to="/landing" className="hover:text-foreground transition-colors">{t("links.home")}</Link>
         </footer>
       </div>
     </div>

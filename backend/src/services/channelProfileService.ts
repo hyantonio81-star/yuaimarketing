@@ -1,12 +1,13 @@
 /**
  * 채널 프로필: 계정별 주제(테마)·언어·제휴 집중·마켓 허용 목록
  * 웹앱에서만 설정·수정 가능 (배포 없이 툭딱 설정)
- * 저장: data/channel-profiles.json
+ * 저장: data/channel-profiles.json(폴백) 및 Supabase(channel_profiles)
  */
 
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 
 export type ChannelTheme =
   | "health"
@@ -43,7 +44,7 @@ type Store = Record<string, ChannelProfile>;
 
 let cache: Store = {};
 
-async function load(): Promise<Store> {
+async function loadFallback(): Promise<Store> {
   const path = getDataPath();
   if (!existsSync(path)) return {};
   try {
@@ -56,7 +57,37 @@ async function load(): Promise<Store> {
   return {};
 }
 
+async function load(): Promise<Store> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("channel_profiles_store")
+      .select("profiles")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (!error && data && data.profiles) {
+      return data.profiles as Store;
+    }
+  }
+  return loadFallback();
+}
+
 async function save(data: Store): Promise<void> {
+  const now = new Date().toISOString();
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase
+      .from("channel_profiles_store")
+      .upsert({ id: "current", profiles: data, updated_at: now }, { onConflict: "id" });
+    
+    if (!error) {
+      cache = { ...data };
+      return;
+    }
+  }
+
   const path = getDataPath();
   const dir = join(path, "..");
   if (!existsSync(dir)) {

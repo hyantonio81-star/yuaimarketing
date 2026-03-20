@@ -52,6 +52,8 @@ export interface ContentAutomationSettings {
   amazonAssociateTag?: string;
   aliexpressAffiliateParams?: string;
   temuAffiliateParams?: string;
+  /** true 시 파이프라인 선정 상품을 랜딩 Tienda(dr-products)에 자동 추가 */
+  syncToDrProducts?: boolean;
 }
 
 /** 파이프라인 1회 실행 결과 */

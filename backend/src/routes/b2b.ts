@@ -1,6 +1,7 @@
-import type { FastifyRequest } from "fastify";
+import type { FastifyRequest, FastifyReply } from "fastify";
 import { FastifyInstance } from "fastify";
 import { checkRateLimitApi } from "../lib/rateLimit.js";
+import { requireUser } from "../lib/auth.js";
 import {
   sanitizeCountryCode,
   sanitizeCountryCodeWithDefault,
@@ -10,6 +11,7 @@ import {
   sanitizeShortString,
   sanitizeOrgId,
 } from "../lib/apiSecurity.js";
+import { getRequestScope } from "../lib/routeScope.js";
 import {
   getTrendSources,
   getCollectionSchedule,
@@ -18,7 +20,7 @@ import {
 import { B2B_SECTORS, getRegionsList, isValidSector, getCountryB2BMetadata } from "../data/b2bRegionMetadata.js";
 import { marketScore } from "../services/marketScoreService.js";
 import { getSegmentedAnalysisResultAsync } from "../services/marketIntelService.js";
-import type { RecommendedCompany } from "../services/marketIntelService.js";
+import type { RecommendedCompany } from "../services/marketIntel/types.js";
 import type { MatchedBuyer } from "../services/buyerMatchingService.js";
 import { generateMarketReport } from "../services/marketReportService.js";
 import { generateMarketingStrategy } from "../services/marketingStrategyService.js";
@@ -59,15 +61,13 @@ import {
 
 /** B2B API 스코프: X-Organization-Id, X-Country (선택). 값은 검증 후 반환 */
 function getB2bScope(req: FastifyRequest): { organization_id?: string; country_code?: string } {
-  const rawOrg = (req.headers["x-organization-id"] as string)?.trim() || (req.query as { orgId?: string })?.orgId?.trim();
-  const rawCountry = (req.headers["x-country"] as string)?.trim() || (req.query as { country?: string })?.country?.trim();
-  const orgId = rawOrg ? sanitizeOrgId(rawOrg) : undefined;
-  const country = rawCountry ? sanitizeCountryCode(rawCountry) ?? undefined : undefined;
-  return { ...(orgId && orgId !== "default" && { organization_id: orgId }), ...(country && { country_code: country }) };
+  return getRequestScope(req, { orgQueryKey: "orgId", countryQueryKey: "country" });
 }
 
 export async function b2bRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", async (request, reply) => {
+  app.addHook("preHandler", async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
     if (!checkRateLimitApi(request)) {
       return reply.code(429).send({ error: "Too Many Requests", message: "요청 한도를 초과했습니다. 잠시 후 다시 시도하세요." });
     }
@@ -404,7 +404,7 @@ export async function b2bRoutes(app: FastifyInstance) {
   /** 리드별 검증 상태 (리드의 buyer_id를 partner_id로 조회) */
   app.get<{ Params: { id: string } }>("/leads/:id/verification-status", async (req, reply) => {
     const leadId = sanitizeShortString(req.params.id, 80);
-    const lead = getLead(leadId);
+    const lead = await getLead(leadId);
     if (!lead) return reply.code(404).send({ error: "Lead not found", lead_id: leadId });
     const partnerId = lead.buyer_id || leadId;
     const verification = getPartnerVerificationStatus(partnerId);
@@ -427,7 +427,7 @@ export async function b2bRoutes(app: FastifyInstance) {
     const country = sanitizeCountryCode(body.country) ?? "US";
     const source = ["manual", "hot_lead", "match_buyers", "api"].includes(body.source ?? "") ? body.source : "manual";
     const score = sanitizeNumber(body.score, 50, 0, 100);
-    return createLead({
+    return await createLead({
       product_or_hs,
       country,
       source: source as CreateLeadInput["source"],
@@ -451,7 +451,7 @@ export async function b2bRoutes(app: FastifyInstance) {
     if (q.min_score != null) filter.min_score = sanitizeNumber(q.min_score, 0, 0, 100);
     const limit = sanitizeNumber(q.limit, 50, 1, 100);
     const offset = sanitizeNumber(q.offset, 0, 0, 1e6);
-    return getLeads(filter, limit, offset);
+    return await getLeads(filter, limit, offset);
   });
 
   /** 리드 이전 */
@@ -463,7 +463,7 @@ export async function b2bRoutes(app: FastifyInstance) {
     const body = req.body ?? {};
     const supplier_id = body.supplier_id != null ? sanitizeShortString(String(body.supplier_id), 64) : undefined;
     const fee = typeof body.fee === "number" ? sanitizeNumber(body.fee, 0, 0, 1e9) : undefined;
-    return transferLead(id, supplier_id, fee);
+    return await transferLead(id, supplier_id, fee);
   });
 
   /** Hot Lead 후보 조회 (trade-market-score + match-buyers, 리드 미생성) */
@@ -493,6 +493,6 @@ export async function b2bRoutes(app: FastifyInstance) {
       ? (/^\d{2,10}$/.test(rawProduct) ? sanitizeHsCode(rawProduct) : sanitizeItemOrProduct(rawProduct, 100)) || "8504"
       : (["DO", "PA"].includes(destination) ? getDefaultHsForLatam(destination) : "8504");
     const count = sanitizeNumber(body.count, 5, 1, 20);
-    return { leads: createHotLeads(origin, destination, productOrHs, count) };
+    return { leads: await createHotLeads(origin, destination, productOrHs, count) };
   });
 }

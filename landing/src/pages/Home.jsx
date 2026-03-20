@@ -3,7 +3,11 @@ import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
 import MarketPulse from "../components/MarketPulse";
 import { useLanguage } from "../context/LanguageContext";
+import { API_BASE, SITE_NAME, SOCIAL_STATS } from "../lib/config";
 import { POPULAR_PRODUCTS } from "../lib/constants";
+import { useSeoMeta } from "../lib/seo";
+
+const DEFAULT_IMG = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&h=300&fit=crop";
 
 const TREND_MONTHS = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb"];
 const TREND_VALUES = [62, 78, 85, 72, 88, 94];
@@ -19,10 +23,36 @@ export default function Home() {
   const { t } = useLanguage();
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterSent, setNewsletterSent] = useState(false);
+  const [newsletterLoading, setNewsletterLoading] = useState(false);
+  const [newsletterError, setNewsletterError] = useState(null);
 
-  const handleNewsletter = (e) => {
+  useSeoMeta({
+    title: SITE_NAME,
+    description: t("home.subline"),
+    path: "/",
+  });
+
+  const handleNewsletter = async (e) => {
     e.preventDefault();
-    if (newsletterEmail.trim()) setNewsletterSent(true);
+    const email = newsletterEmail.trim();
+    if (!email) return;
+    setNewsletterLoading(true);
+    setNewsletterError(null);
+    try {
+      const url = API_BASE ? `${API_BASE}/api/landing/newsletter` : "/api/landing/newsletter";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, source: "landing-home" }),
+      });
+      if (!res.ok) throw new Error("newsletter_failed");
+      setNewsletterSent(true);
+      setNewsletterEmail("");
+    } catch {
+      setNewsletterError(t("contact.errorGeneric"));
+    } finally {
+      setNewsletterLoading(false);
+    }
   };
 
   return (
@@ -38,13 +68,13 @@ export default function Home() {
         <div className="flex flex-wrap justify-center gap-4 mt-10">
           <Link
             to="/products"
-            className="inline-flex items-center justify-center rounded-xl bg-primary px-8 py-3.5 text-sm font-medium text-white hover:opacity-90 transition-all duration-200 hover:shadow-lg hover:shadow-primary/20"
+            className="btn-micro inline-flex items-center justify-center rounded-xl bg-primary px-8 py-3.5 text-sm font-medium text-white hover:opacity-90 transition-all duration-200 hover:shadow-lg hover:shadow-primary/20"
           >
             {t("home.ctaShop")}
           </Link>
           <Link
             to="/blog"
-            className="inline-flex items-center justify-center rounded-xl border border-slate-600 px-8 py-3.5 text-sm font-medium text-slate-300 hover:bg-slate-800/80 hover:border-slate-500 transition-all duration-200"
+            className="btn-micro inline-flex items-center justify-center rounded-xl border border-slate-600 px-8 py-3.5 text-sm font-medium text-slate-300 hover:bg-slate-800/80 hover:border-slate-500 transition-all duration-200"
           >
             {t("nav.blog")}
           </Link>
@@ -56,15 +86,21 @@ export default function Home() {
         <div className="max-w-5xl mx-auto px-4 py-8">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
             <div>
-              <p className="text-3xl md:text-4xl font-bold text-primary tabular-nums">10K+</p>
+              <p className="text-3xl md:text-4xl font-bold text-primary tabular-nums">
+                {SOCIAL_STATS.users}
+              </p>
               <p className="text-slate-400 text-sm mt-1 tracking-wide">{t("home.socialProof1")}</p>
             </div>
             <div>
-              <p className="text-3xl md:text-4xl font-bold text-primary tabular-nums">500+</p>
+              <p className="text-3xl md:text-4xl font-bold text-primary tabular-nums">
+                {SOCIAL_STATS.partners}
+              </p>
               <p className="text-slate-400 text-sm mt-1 tracking-wide">{t("home.socialProof2")}</p>
             </div>
             <div>
-              <p className="text-3xl md:text-4xl font-bold text-primary tabular-nums">50+</p>
+              <p className="text-3xl md:text-4xl font-bold text-primary tabular-nums">
+                {SOCIAL_STATS.globalReach}
+              </p>
               <p className="text-slate-400 text-sm mt-1 tracking-wide">{t("home.socialProof3")}</p>
             </div>
           </div>
@@ -75,15 +111,15 @@ export default function Home() {
       <section className="max-w-5xl mx-auto px-4 py-14">
         <h2 className="section-title mb-10 text-center">{t("home.sectionServices")}</h2>
         <div
-          className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5"
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 bento-grid"
           style={{ gridAutoRows: "minmax(180px, auto)" }}
         >
           {/* Cell 1: Market Pulse — 1 col */}
-          <div className="md:row-span-2">
+          <div className="md:row-span-2 bento-cell bento-cell-featured">
             <MarketPulse />
           </div>
           {/* Cell 2–3: Trend chart — span 2 cols */}
-          <div className="md:col-span-2 glass-panel rounded-2xl p-6 flex flex-col justify-end min-h-[200px]">
+          <div className="md:col-span-2 glass-panel rounded-2xl p-6 flex flex-col justify-end min-h-[200px] bento-cell ring-1 ring-slate-700/50 hover:ring-primary/30 transition-shadow duration-300">
             <p className="text-slate-500 text-sm mb-3">{t("home.trendTitle")}</p>
             <div className="flex items-end justify-between gap-2 h-28">
               {TREND_VALUES.map((val, i) => (
@@ -103,7 +139,7 @@ export default function Home() {
             <Link
               key={item.to}
               to={item.to}
-              className="card-float glass-panel rounded-2xl p-6 flex flex-col justify-center min-h-[140px] md:min-h-[120px]"
+              className="card-float glass-panel rounded-2xl p-6 flex flex-col justify-center min-h-[140px] md:min-h-[120px] bento-cell"
             >
               <h3 className="font-semibold text-white mb-1">{t(item.titleKey)}</h3>
               <p className="text-slate-400 text-sm leading-relaxed">{t(item.descKey)}</p>
@@ -125,9 +161,10 @@ export default function Home() {
               <div className="img-hover-wrap relative aspect-square bg-slate-700">
                 <img
                   src={p.image}
-                  alt=""
+                  alt={p.title}
                   className="w-full h-full object-cover"
                   loading="lazy"
+                  onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_IMG; }}
                 />
               </div>
               <div className="p-4">
@@ -171,11 +208,15 @@ export default function Home() {
               />
               <button
                 type="submit"
-                className="rounded-xl bg-primary px-6 py-3 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+                disabled={newsletterLoading}
+                className="btn-micro rounded-xl bg-primary px-6 py-3 text-sm font-medium text-white hover:opacity-90 transition-opacity"
               >
-                {t("home.newsletterSubmit")}
+                {newsletterLoading ? "..." : t("home.newsletterSubmit")}
               </button>
             </form>
+          )}
+          {newsletterError && (
+            <p className="text-amber-400 text-sm mt-3">{newsletterError}</p>
           )}
         </div>
       </section>
@@ -187,7 +228,7 @@ export default function Home() {
           <p className="text-slate-400 text-sm mb-4">{t("tienda.subtitle")}</p>
           <Link
             to="/tienda"
-            className="inline-flex items-center justify-center rounded-xl bg-emerald-600/90 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
+            className="btn-micro inline-flex items-center justify-center rounded-xl bg-emerald-600/90 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
           >
             {t("home.tiendaCta")}
           </Link>

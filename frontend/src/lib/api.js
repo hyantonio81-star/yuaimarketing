@@ -3,17 +3,22 @@ import { getCurrentCountryCode } from "./marketStore.js";
 import { supabase } from "./supabase.js";
 
 const explicit = import.meta.env.VITE_API_URL;
+const isLocalHost =
+  typeof window !== "undefined" &&
+  (window.location?.hostname === "localhost" || window.location?.hostname === "127.0.0.1");
 const API_BASE =
   explicit !== undefined && explicit !== ""
     ? explicit
-    : typeof window !== "undefined" && window.location?.hostname !== "localhost"
-      ? ""
-      : "http://localhost:4000";
+    : isLocalHost
+      ? "" // Vite proxy forwards /api to backend :4000
+      : "";
 
 export const api = axios.create({
   baseURL: `${API_BASE}/api`,
   headers: { "Content-Type": "application/json" },
 });
+let handlingUnauthorized = false;
+const jobVideoUrlCache = new Map();
 
 api.interceptors.request.use(async (config) => {
   const country = getCurrentCountryCode();
@@ -36,6 +41,26 @@ api.interceptors.response.use(
     if (data && typeof data === "object") {
       const msg = typeof data.message === "string" ? data.message : typeof data.error === "string" ? data.error : data.error?.message;
       if (msg) err.apiMessage = msg;
+    }
+    if (err?.response?.status === 401 && typeof window !== "undefined" && !handlingUnauthorized) {
+      const currentPath = window.location?.pathname ?? "";
+      if (!currentPath.startsWith("/login")) {
+        handlingUnauthorized = true;
+        Promise.resolve()
+          .then(async () => {
+            try {
+              if (supabase) {
+                await supabase.auth.signOut();
+              }
+            } catch {
+              // ignore sign-out errors and continue redirect
+            }
+            window.location.replace("/login?reason=session_expired");
+          })
+          .finally(() => {
+            handlingUnauthorized = false;
+          });
+      }
     }
     return Promise.reject(err);
   }
@@ -184,6 +209,17 @@ export const adminApi = {
   postBootstrap: (email, password) => api.post("/admin/bootstrap", { email, password }).then((r) => r.data),
 };
 
+/** KPI 목표 (BSC·SMART). 로그인 필수. */
+export const kpiApi = {
+  getGoals: () => api.get("/kpi/goals").then((r) => r.data),
+  setGoals: (goals) => api.put("/kpi/goals", { goals }).then((r) => r.data),
+};
+
+/** KPI 감사원: 일과 루틴·KPI 감사 보고서 */
+export const auditorApi = {
+  getReport: () => api.get("/nexus/auditor/report").then((r) => r.data),
+};
+
 /** YouTube Shorts 에이전트: 트렌드, 파이프라인, 작업, YouTube 연동, 아바타 */
 export const shortsApi = {
   getTrends: (keywords, maxPerKeyword) =>
@@ -219,9 +255,19 @@ export const shortsApi = {
     api.get("/shorts/library").then((r) => r.data),
   getChecklist: (limit) =>
     api.get("/shorts/checklist", { params: limit != null ? { limit } : {} }).then((r) => r.data),
-  getJobVideoUrl: (jobId) => {
-    const base = (api.defaults.baseURL || "").replace(/\/$/, "");
-    return `${base}/shorts/jobs/${jobId}/video`;
+  getJobVideoUrl: async (jobId) => {
+    if (jobVideoUrlCache.has(jobId)) return jobVideoUrlCache.get(jobId);
+    const res = await api.get(`/shorts/jobs/${jobId}/video`, { responseType: "blob" });
+    const blobUrl = URL.createObjectURL(res.data);
+    jobVideoUrlCache.set(jobId, blobUrl);
+    return blobUrl;
+  },
+  revokeJobVideoUrl: (jobId) => {
+    const url = jobVideoUrlCache.get(jobId);
+    if (url) {
+      URL.revokeObjectURL(url);
+      jobVideoUrlCache.delete(jobId);
+    }
   },
   uploadJob: (jobId, youtubeKey = "default", platforms) =>
     api.post(`/shorts/jobs/${jobId}/upload`, { youtubeKey, platforms }).then((r) => r.data),
@@ -250,6 +296,12 @@ export const shortsApi = {
     api.get(`/shorts/channel-profiles/${encodeURIComponent(key)}`, { params: { platform } }).then((r) => r.data),
   setChannelProfile: (key, profile, platform = "youtube") =>
     api.put(`/shorts/channel-profiles/${encodeURIComponent(key)}`, profile, { params: { platform } }).then((r) => r.data),
+  
+  /** 배포 관리 API */
+  addToDistributionQueue: (jobIds, platforms, scheduledAt) =>
+    api.post("/shorts/distribution/queue", { jobIds, platforms, scheduledAt }).then((r) => r.data),
+  getDistributionQueue: () =>
+    api.get("/shorts/distribution/queue").then((r) => r.data),
 };
 
 /** 이커머스 채널 연동 (B2C). orgId 있으면 X-Organization-Id 헤더로 전달. */

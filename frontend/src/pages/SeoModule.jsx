@@ -158,7 +158,7 @@ export default function SeoModule() {
       });
       setSuggestionsResult(data);
     } catch (e) {
-      setSuggestionsError(e.message || "제안을 불러오지 못했습니다.");
+      setSuggestionsError(e.message || t("seoContent.suggestionsError"));
     } finally {
       setSuggestionsLoading(false);
     }

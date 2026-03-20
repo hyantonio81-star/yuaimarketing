@@ -87,7 +87,7 @@ export default function InventorySyncSection({ connectedChannels = [] }) {
         <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
           <div className="flex items-center gap-2 text-foreground font-medium">
             <Package className="w-4 h-4 text-pillar3" />
-            {t("b2cCommerce.centralStock")}: {result.central_stock} (변동 {result.quantity_change >= 0 ? "+" : ""}{result.quantity_change})
+            {t("b2cCommerce.centralStock")}: {result.central_stock} ({t("b2cCommerce.variation")} {result.quantity_change >= 0 ? "+" : ""}{result.quantity_change})
           </div>
           {result.low_stock_alert && (
             <div className="flex items-center gap-2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 px-3 py-2 text-sm">

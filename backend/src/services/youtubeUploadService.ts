@@ -138,7 +138,11 @@ function getClientSecret(): string | null {
   return (process.env.YOUTUBE_CLIENT_SECRET ?? "").trim() || null;
 }
 function getRedirectUri(): string {
-  return (process.env.YOUTUBE_REDIRECT_URI ?? "").trim() || "http://localhost:4000/api/shorts/youtube/callback";
+  const redirectUri = (process.env.YOUTUBE_REDIRECT_URI ?? "").trim();
+  if (!redirectUri) {
+    throw new Error("YOUTUBE_REDIRECT_URI is required.");
+  }
+  return redirectUri;
 }
 
 /** OAuth 인증 URL. state에 key를 넣어 callback에서 사용 (key = 계정 식별자, 예: default, yt_2) */

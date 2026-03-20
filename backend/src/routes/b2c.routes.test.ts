@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import Fastify from "fastify";
 import { b2cRoutes } from "./b2c.js";
+
+vi.mock("../lib/auth.js", () => ({
+  requireUser: async () => ({ id: "test-user", role: "user" }),
+}));
 
 describe("B2C routes", () => {
   let app: Awaited<ReturnType<typeof Fastify>>;

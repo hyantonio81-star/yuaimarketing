@@ -1,11 +1,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { checkRateLimitApi } from "../lib/rateLimit.js";
+import { requireUser } from "../lib/auth.js";
 import {
-  sanitizeOrgId,
-  sanitizeCountryCodeWithDefault,
   sanitizeShortString,
   sanitizeNumber,
 } from "../lib/apiSecurity.js";
+import { getRequestOrgId, getRequestScope } from "../lib/routeScope.js";
 import { updateInventory } from "../services/inventorySyncService.js";
 import { processOrderAuto, type OrderInput } from "../services/orderAutomationService.js";
 import { calculateOptimalPrice, type ProductInput } from "../services/optimalPriceService.js";
@@ -31,16 +31,11 @@ import type { MarketplaceId } from "../services/threadsCommerce/types.js";
 
 /** Request scope: organization + country (Pillar 3 = 판매 국가 기준). */
 function getB2cScope(request: FastifyRequest): { organization_id?: string; country_code?: string } {
-  const rawCountry = (request.headers["x-country"] as string)?.trim() || (request.query as { country?: string })?.country?.trim();
-  const rawOrgId = (request.headers["x-organization-id"] as string)?.trim();
-  const country_code = rawCountry ? sanitizeCountryCodeWithDefault(rawCountry, "US") : undefined;
-  const organization_id = rawOrgId ? sanitizeOrgId(rawOrgId) : undefined;
-  return { ...(country_code && { country_code }), ...(organization_id && organization_id !== "default" && { organization_id }) };
+  return getRequestScope(request, { orgQueryKey: "orgId", countryQueryKey: "country" });
 }
 
 function getOrgId(request: FastifyRequest): string {
-  const raw = (request.headers["x-organization-id"] as string)?.trim();
-  return sanitizeOrgId(raw || "default");
+  return getRequestOrgId(request, "orgId");
 }
 
 interface UpdateInventoryBody {
@@ -89,7 +84,9 @@ const MAX_EMAIL_LENGTH = 200;
 const MAX_REVIEW_TEXT_LENGTH = 2000;
 
 export async function b2cRoutes(fastify: FastifyInstance) {
-  fastify.addHook("preHandler", async (request, reply) => {
+  fastify.addHook("preHandler", async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
     if (!checkRateLimitApi(request)) {
       return reply.code(429).send({ error: "Too Many Requests", message: "요청 한도를 초과했습니다. 잠시 후 다시 시도하세요." });
     }

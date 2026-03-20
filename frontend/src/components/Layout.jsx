@@ -79,13 +79,20 @@ const subLinkClass = (isActive) =>
 
 export default function Layout() {
   const { t, language, setLanguage, languageCodes } = useLanguage();
-  const { user, signOut, isAdmin } = useAuth();
+  const { user, session, signOut, isAdmin, refreshSession } = useAuth();
   const { countries, currentCountryCode, setCountry, loading: marketLoading } = useMarket();
   const [govManualMode, setGovManualMode] = useState(false);
 
   useEffect(() => {
-    api.get("/gov/status").then(({ data }) => setGovManualMode(data?.mode === "manual")).catch(() => {});
+    api
+      .get("/gov/status")
+      .then(({ data }) => setGovManualMode(data?.mode === "manual"))
+      .catch(() => setGovManualMode(true));
   }, []);
+
+  useEffect(() => {
+    refreshSession();
+  }, [refreshSession]);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -160,7 +167,7 @@ export default function Layout() {
             </div>
           )}
         </nav>
-        <div className="p-2 border-t border-border space-y-2">
+        <div className="p-2 border-t border-border space-y-2 shrink-0">
           <div className="px-2 py-1">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
               <MapPin className="w-3.5 h-3.5" />
@@ -183,10 +190,10 @@ export default function Layout() {
               <p className="text-xs text-muted-foreground mt-0.5 py-1">{t("common.loading")}</p>
             )}
           </div>
-          {user && (
-            <div className="px-2 py-1">
-              <p className="text-xs text-muted-foreground truncate" title={user.email}>
-                {user.email}
+          {(user ?? session) && (
+            <div className="px-2 py-1 rounded-md bg-muted/30 border border-border/50">
+              <p className="text-xs text-muted-foreground truncate" title={user?.email ?? ""}>
+                {user?.email ?? t("nav.signedIn")}
               </p>
               <button
                 type="button"

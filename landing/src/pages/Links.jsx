@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import Layout from "../components/Layout";
-import { SITE_NAME, SUPPORT_EMAIL } from "../lib/config";
+import { SITE_NAME, SUPPORT_EMAIL, INSTAGRAM_URL, THREADS_URL, FACEBOOK_URL } from "../lib/config";
 import { useLanguage } from "../context/LanguageContext";
+import { useSeoMeta } from "../lib/seo";
 
 function getLinkSections(t) {
   return [
@@ -28,9 +29,9 @@ function getLinkSections(t) {
       id: "sns",
       titleKey: "links.sns",
       items: [
-        { label: "Instagram", to: "#", external: true },
-        { label: "Threads", to: "#", external: true },
-        { label: "Facebook", to: "#", external: true },
+        { label: "Instagram", to: INSTAGRAM_URL || "#", external: true },
+        { label: "Threads", to: THREADS_URL || "#", external: true },
+        { label: "Facebook", to: FACEBOOK_URL || "#", external: true },
       ],
     },
     {
@@ -52,7 +53,7 @@ function LinkCard({ label, labelKey, to, external, t }) {
       href={to}
       target={isExternal ? "_blank" : undefined}
       rel={isExternal ? "noopener noreferrer" : undefined}
-      className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4 hover:border-primary/50 hover:bg-slate-800 transition-colors"
+      className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/50 p-4 hover:border-primary/50 hover:bg-slate-800 transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
     >
       <span className="flex-1 font-medium text-white">{text}</span>
       <span className="text-slate-500">→</span>
@@ -63,6 +64,12 @@ function LinkCard({ label, labelKey, to, external, t }) {
 export default function Links() {
   const { t } = useLanguage();
   const sections = getLinkSections(t);
+
+  useSeoMeta({
+    title: t("nav.allLinks"),
+    description: t("links.subtitle"),
+    path: "/links",
+  });
 
   useEffect(() => {
     const hash = window.location.hash?.slice(1);

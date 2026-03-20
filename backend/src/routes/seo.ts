@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import { requireUser } from "../lib/auth.js";
 import {
   getTools,
   getAutoAnalysis,
@@ -9,6 +10,11 @@ import { generateSocialCalendar } from "../services/socialCalendarService.js";
 import { generateAdVariants } from "../services/adVariantsService.js";
 
 export async function seoRoutes(app: FastifyInstance) {
+  app.addHook("preHandler", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user) return reply;
+  });
+
   app.get("/tools", async () => ({ tools: getTools() }));
   app.get("/analysis", async () => ({ analysis: getAutoAnalysis() }));
   app.get("/ai-generation", async () => ({ items: getAiGeneration() }));

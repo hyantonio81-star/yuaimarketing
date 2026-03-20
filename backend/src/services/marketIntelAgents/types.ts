@@ -5,7 +5,7 @@
 
 import type { ComtradeDataRow } from "../externalApis/unComtrade.js";
 import type { OpenCorporatesCompany } from "../externalApis/opencorporates.js";
-import type { ReportLanguage } from "../marketIntelService.js";
+import type { ReportLanguage } from "../marketIntel/types.js";
 
 export type { ReportLanguage };
 

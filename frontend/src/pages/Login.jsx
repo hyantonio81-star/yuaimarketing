@@ -4,10 +4,12 @@ import { Shield, Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { adminApi } from "../lib/api.js";
+import { isSupabaseConfigured } from "../lib/supabase.js";
+import { setDevSkipLogin, isRequireLoginEnabled } from "../components/ProtectedRoute.jsx";
 
 export default function Login() {
   const { t } = useLanguage();
-  const { signIn } = useAuth();
+  const { signIn, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState("");
@@ -17,11 +19,17 @@ export default function Login() {
   const [setupAllowed, setSetupAllowed] = useState(false);
 
   useEffect(() => {
-    adminApi.getBootstrapStatus().then((data) => setSetupAllowed(data.allowed === true)).catch(() => {});
+    adminApi.getBootstrapStatus().then((data) => setSetupAllowed(data.allowed === true)).catch(() => setSetupAllowed(false));
   }, []);
 
   const from = location.state?.from?.pathname || "/";
   const setupSuccess = location.state?.message === "setup_success";
+  const isProd = import.meta.env.PROD === true;
+  const showDevBypass = !isProd && !isSupabaseConfigured && isRequireLoginEnabled();
+
+  useEffect(() => {
+    if (!authLoading && user) navigate(from, { replace: true });
+  }, [authLoading, user, from, navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -47,12 +55,31 @@ export default function Login() {
           <h1 className="text-xl font-bold text-primary">{t("appName")}</h1>
         </div>
         <p className="text-sm text-muted-foreground mb-6">{t("auth.signInTitle")}</p>
+        {!isSupabaseConfigured && (
+          <p className="mb-4 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-sm" role="status">
+            {t("auth.supabaseNotConfigured")}
+          </p>
+        )}
         {setupSuccess && (
           <p className="mb-4 p-3 rounded-md bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-400 text-sm" role="status">
             {t("admin.bootstrapSuccess")}
           </p>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
+          {showDevBypass && (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDevSkipLogin(true);
+                  navigate(from || "/", { replace: true });
+                }}
+                className="w-full py-2 px-4 rounded-md border-2 border-dashed border-muted-foreground/50 text-muted-foreground font-medium hover:bg-muted/50 hover:border-muted-foreground"
+              >
+                {t("auth.devSkipLogin")}
+              </button>
+            </div>
+          )}
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-foreground mb-1">
               {t("auth.email")}
@@ -88,7 +115,7 @@ export default function Login() {
           )}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !isSupabaseConfigured}
             className="w-full py-2 px-4 rounded-md bg-primary text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50"
           >
             {loading ? t("common.loading") : t("auth.signIn")}

@@ -7,11 +7,10 @@ const store = new Map<string, { count: number; resetAt: number }>();
 const WINDOW_MS = 60 * 1000; // 1 min
 const MAX_PER_WINDOW = 30;   // per key (AI)
 const MAX_API_PER_WINDOW = 120; // per key (B2B/B2C 등 일반 API)
+const MAX_LOGIN_PER_WINDOW = 5; // per key (Tienda Admin 로그인 시도)
 
 function getKey(req: { ip?: string; headers?: Record<string, string | string[] | undefined> }): string {
-  const forwarded = req.headers?.["x-forwarded-for"];
-  const ip = typeof forwarded === "string" ? forwarded.split(",")[0].trim() : req.ip ?? "anonymous";
-  return ip;
+  return req.ip ?? "anonymous";
 }
 
 function checkLimit(req: { ip?: string; headers?: Record<string, string | string[] | undefined> }, keyPrefix: string, maxPerWindow: number): boolean {
@@ -35,6 +34,11 @@ export function checkRateLimit(req: { ip?: string; headers?: Record<string, stri
 /** B2B/B2C 등 일반 API: IP당 1분 120회 초과 시 429 권장 */
 export function checkRateLimitApi(req: { ip?: string; headers?: Record<string, string | string[] | undefined> }): boolean {
   return checkLimit(req, "api", MAX_API_PER_WINDOW);
+}
+
+/** Tienda Admin 로그인: IP당 1분 5회 초과 시 429 권장 */
+export function checkRateLimitLogin(req: { ip?: string; headers?: Record<string, string | string[] | undefined> }): boolean {
+  return checkLimit(req, "landing-login", MAX_LOGIN_PER_WINDOW);
 }
 
 export function getRateLimitRemaining(req: { ip?: string; headers?: Record<string, string | string[] | undefined> }): number {

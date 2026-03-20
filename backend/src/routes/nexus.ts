@@ -6,8 +6,10 @@ import {
   getProactiveAlertsAsync,
 } from "../services/nexusCoreService.js";
 import { getRoutineRunHistory, getLastRunsPerTask } from "../services/nexusRoutineRunsService.js";
+import { generateAuditorReport } from "../services/auditorService.js";
 import { validateAiRequestBody } from "../lib/aiSecurity.js";
 import { checkRateLimit } from "../lib/rateLimit.js";
+import { requireUser } from "../lib/auth.js";
 
 interface HandleRequestBody {
   request: string;
@@ -15,6 +17,11 @@ interface HandleRequestBody {
 }
 
 export async function nexusRoutes(fastify: FastifyInstance) {
+  fastify.addHook("preHandler", async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = await requireUser(request, reply);
+    if (!user) return;
+  });
+
   fastify.get("/daily-routine", async () => {
     return getDailyRoutineAsync();
   });
@@ -64,5 +71,9 @@ export async function nexusRoutes(fastify: FastifyInstance) {
 
   fastify.get("/proactive-alerts", async () => {
     return getProactiveAlertsAsync();
+  });
+
+  fastify.get("/auditor/report", async () => {
+    return generateAuditorReport();
   });
 }

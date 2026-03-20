@@ -61,7 +61,7 @@ export interface ShortsScript {
 
 export interface ShortsPipelineJob {
   jobId: string;
-  status: "pending" | "collecting" | "script" | "images" | "video" | "video_ready" | "upload" | "done" | "failed";
+  status: "pending" | "collecting" | "script" | "images" | "voice" | "video" | "video_ready" | "upload" | "done" | "failed" | "reviewing" | "queued";
   topic?: TrendTopic;
   script?: ShortsScript;
   videoUrl?: string;
@@ -69,11 +69,28 @@ export interface ShortsPipelineJob {
   deployedUrls?: Record<string, string>;
   /** 저장된 영상 파일 경로 (video_ready 또는 done 시) */
   videoPath?: string;
+  /** Supabase Storage 영구 URL */
+  supabaseUrl?: string;
   /** 보관 만료일 ISO 문자열 (저장 정책용) */
   expiresAt?: string;
   /** 파일 삭제된 시점 (만료/상한 정리 후 체크리스트만 남을 때) */
   fileDeletedAt?: string;
   error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 배포 대기열 항목 */
+export interface DistributionQueueItem {
+  id: string;
+  jobId: string;
+  platform: "youtube" | "tiktok" | "instagram" | "facebook";
+  status: "waiting" | "processing" | "done" | "failed";
+  scheduledAt: string;
+  publishedAt?: string;
+  error?: string;
+  retryCount: number;
+  metadata?: any;
   createdAt: string;
   updatedAt: string;
 }

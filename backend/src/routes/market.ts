@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../lib/auth.js";
 import {
   getCountries,
   getCountryByCode,
@@ -8,6 +9,11 @@ import {
 import type { RegisterOrganizationBody } from "../types/market.js";
 
 export async function marketRoutes(app: FastifyInstance) {
+  app.addHook("preHandler", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user) return reply;
+  });
+
   app.get("/countries", async () => {
     return { countries: getCountries() };
   });

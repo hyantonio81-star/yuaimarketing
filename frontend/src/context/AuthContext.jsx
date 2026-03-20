@@ -8,6 +8,7 @@ const AuthContext = createContext({
   signIn: async () => {},
   signUp: async () => {},
   signOut: async () => {},
+  refreshSession: async () => {},
   isAdmin: false,
 });
 
@@ -17,6 +18,20 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 개발 모드에서는 실제 세션과 관계없이 항상 관리자 권한을 가진 유저로 초기화합니다.
+    if (import.meta.env.DEV) {
+      const devUser = {
+        id: "dev-user",
+        email: "anto@yuanto.com",
+        app_metadata: { role: "admin" },
+        user_metadata: { full_name: "Antonio (Dev)" },
+      };
+      setUser(devUser);
+      setSession({ user: devUser, access_token: "dev-token" });
+      setLoading(false);
+      return;
+    }
+
     if (!supabase) {
       setLoading(false);
       return;
@@ -53,6 +68,13 @@ export function AuthProvider({ children }) {
     if (supabase) await supabase.auth.signOut();
   }, []);
 
+  const refreshSession = useCallback(async () => {
+    if (!supabase) return;
+    const { data: { session: s } } = await supabase.auth.getSession();
+    setSession(s);
+    setUser(s?.user ?? null);
+  }, []);
+
   const isAdmin = user?.app_metadata?.role === "admin";
 
   return (
@@ -64,6 +86,7 @@ export function AuthProvider({ children }) {
         signIn,
         signUp,
         signOut,
+        refreshSession,
         isAdmin,
       }}
     >

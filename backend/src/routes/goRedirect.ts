@@ -39,6 +39,21 @@ export async function goRedirectRoutes(app: FastifyInstance) {
     if (!id) return reply.code(404).send({ error: "Not found" });
     const url = redirectsMap[id] ?? process.env[`GO_${id.replace(/-/g, "_").toUpperCase()}`];
     if (!url || typeof url !== "string") return reply.code(404).send({ error: "Redirect not found" });
+
+    // 클릭 추적 (비동기, 리다이렉트 방해 금지)
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      supabase.from("link_clicks").insert({
+        link_id: id,
+        target_url: url,
+        referrer: request.headers.referer || null,
+        user_agent: request.headers["user-agent"] || null,
+        ip_hash: request.ip // 개인정보보호를 위해 IP 전체 저장보다는 해싱 권장되나 일단 기록
+      }).then(({ error }) => {
+        if (error) app.log.warn(`Click tracking error for ${id}: ${error.message}`);
+      });
+    }
+
     return reply.redirect(url, 302);
   });
 }

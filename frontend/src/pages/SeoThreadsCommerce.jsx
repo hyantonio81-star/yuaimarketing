@@ -10,7 +10,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import SectionCard from "../components/SectionCard";
-import { threadsCommerceApi } from "../lib/api";
+import { threadsCommerceApi, getApiErrorMessage } from "../lib/api";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
 export default function SeoThreadsCommerce() {
@@ -57,7 +57,9 @@ export default function SeoThreadsCommerce() {
         setAliexpressAffiliateParams(s.aliexpressAffiliateParams ?? "");
         setTemuAffiliateParams(s.temuAffiliateParams ?? "");
       }
-    }).catch(() => {});
+    }).catch((e) => {
+      setRunError(getApiErrorMessage(e, t("seoContent.threadsCommerceRunFailed")));
+    });
   };
   const loadPostLog = () => {
     threadsCommerceApi.getPostLog(30).then((d) => setPostLog(d?.entries ?? [])).catch(() => setPostLog([]));
@@ -133,7 +135,7 @@ export default function SeoThreadsCommerce() {
       loadRateLimit();
       loadPostLog();
     } catch (e) {
-      setRunError(e?.response?.data?.error || e?.apiMessage || e?.message || "실행 실패");
+      setRunError(e?.response?.data?.error || e?.apiMessage || e?.message || t("seoContent.runFailed"));
     } finally {
       setRunLoading(false);
     }
@@ -149,6 +151,12 @@ export default function SeoThreadsCommerce() {
           {t("seoContent.threadsCommerceTitle")}
         </h1>
         <p className="text-muted-foreground mt-1">{t("seoContent.threadsCommerceSubtitle")}</p>
+        {!connection.connected && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <span>{t("seoContent.threadsCommerceNotConnectedBanner")}</span>
+          </div>
+        )}
       </header>
 
       <SectionCard title={t("seoContent.threadsCommerceConnection")} className="mb-6">
@@ -257,7 +265,7 @@ export default function SeoThreadsCommerce() {
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">{t("seoContent.threadsCommerceTargetCountry")}</label>
             <select value={targetCountry} onChange={(e) => setTargetCountry(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full max-w-xs">
-              <option value="KR">한국 (KR)</option>
+              <option value="KR">{t("seoContent.korea")} (KR)</option>
               <option value="US">United States (US)</option>
               <option value="DO">Dominicana (DO)</option>
               <option value="MX">México (MX)</option>
@@ -267,7 +275,7 @@ export default function SeoThreadsCommerce() {
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">{t("seoContent.threadsCommerceContentLanguage")}</label>
             <select value={contentLanguage} onChange={(e) => setContentLanguage(e.target.value)} className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full max-w-xs">
-              <option value="ko">한국어</option>
+              <option value="ko">{t("seoContent.korean")}</option>
               <option value="en">English</option>
               <option value="es-DO">Español (DO)</option>
               <option value="es-MX">Español (MX)</option>
@@ -284,7 +292,7 @@ export default function SeoThreadsCommerce() {
               onChange={(e) => setInfoRatio(Number(e.target.value))}
               className="w-full"
             />
-            <span className="text-sm text-muted-foreground">{infoRatio}% 정보형 (권장 70%)</span>
+            <span className="text-sm text-muted-foreground">{infoRatio}% {t("seoContent.infoType")} ({t("seoContent.recommended")} 70%)</span>
           </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">{t("seoContent.threadsCommercePriceDrop")}</label>
@@ -296,7 +304,7 @@ export default function SeoThreadsCommerce() {
               onChange={(e) => setPriceDropThreshold(Number(e.target.value) || 15)}
               className="w-24 rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
-            <span className="text-sm text-muted-foreground ml-2">% 이상 하락 시 트리거</span>
+            <span className="text-sm text-muted-foreground ml-2">% {t("seoContent.priceDropTrigger")}</span>
           </div>
           <button type="button" onClick={handleSaveSettings} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 w-fit">
             {t("seoContent.threadsCommerceSaveSettings")}
@@ -383,7 +391,7 @@ export default function SeoThreadsCommerce() {
       <SectionCard title={t("seoContent.threadsCommercePostLog")} className="mb-6">
         <p className="text-sm text-muted-foreground mb-3">{t("seoContent.threadsCommercePostLogDesc")}</p>
         <button type="button" onClick={loadPostLog} className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted mb-3">
-          새로고침
+          {t("common.refresh")}
         </button>
         {postLog.length > 0 ? (
           <ul className="space-y-2 text-sm">

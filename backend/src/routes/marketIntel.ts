@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import { requireUser } from "../lib/auth.js";
 import { readFile } from "node:fs/promises";
 import {
   getSources,
@@ -25,6 +26,11 @@ import {
 import { getReportFileMeta } from "../services/marketReportGenerator.js";
 
 export async function marketIntelRoutes(app: FastifyInstance) {
+  app.addHook("preHandler", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user) return reply;
+  });
+
   /** Data Sources (카테고리·유형·가격대). 쿼리 lang=ko|en|es 시 categories 포함 */
   app.get<{ Querystring: { lang?: string } }>("/sources", async (req) => {
     const lang = (req.query?.lang ?? "ko") as "ko" | "en" | "es";

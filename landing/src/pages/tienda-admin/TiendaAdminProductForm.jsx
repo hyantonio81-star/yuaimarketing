@@ -19,6 +19,7 @@ const defaultProduct = {
   origin: "Dominican Republic",
   stock_quantity: "0",
   is_visible: true,
+  partner: "",
   contact_whatsapp: "",
   contact_email: "",
 };
@@ -65,6 +66,7 @@ export default function TiendaAdminProductForm() {
         origin: product.origin ?? "Dominican Republic",
         stock_quantity: String(product.stock_quantity ?? 0),
         is_visible: product.is_visible !== false,
+        partner: product.partner ?? "",
         contact_whatsapp: product.contact_whatsapp ?? "",
         contact_email: product.contact_email ?? "",
       });
@@ -85,6 +87,7 @@ export default function TiendaAdminProductForm() {
     origin: form.origin.trim() || "Dominican Republic",
     stock_quantity: form.stock_quantity === "" ? 0 : Math.max(0, Number(form.stock_quantity) || 0),
     is_visible: form.is_visible,
+    partner: form.partner.trim() || undefined,
     contact_whatsapp: form.contact_whatsapp.trim() || undefined,
     contact_email: form.contact_email.trim() || undefined,
   });
@@ -93,6 +96,16 @@ export default function TiendaAdminProductForm() {
     e.preventDefault();
     if (!form.title.trim()) {
       setError("Título es obligatorio.");
+      return;
+    }
+    const priceNum = form.price === "" ? 0 : Number(form.price);
+    if (Number.isNaN(priceNum) || priceNum < 0) {
+      setError("El precio debe ser un número mayor o igual a 0.");
+      return;
+    }
+    const slugVal = form.slug.trim().toLowerCase();
+    if (slugVal && !/^[a-z0-9_-]+$/.test(slugVal)) {
+      setError("El slug solo puede tener letras minúsculas, números, guiones y guión bajo.");
       return;
     }
     setError("");
@@ -228,6 +241,18 @@ export default function TiendaAdminProductForm() {
               className="w-full rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-white"
             />
           </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1">LOCAL / BOX</label>
+          <p className="text-xs text-slate-500 mb-1">LOCAL = productos locales en general · BOX = Carton DR / empaque</p>
+          <select
+            value={form.partner === "Carton DR" ? "Carton DR" : ""}
+            onChange={(e) => update("partner", e.target.value)}
+            className="w-full rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-white"
+          >
+            <option value="">LOCAL</option>
+            <option value="Carton DR">BOX (Carton DR)</option>
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-1">Cantidad en stock</label>

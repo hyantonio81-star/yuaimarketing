@@ -1,6 +1,7 @@
 /**
  * analyze_reviews: 모든 채널 리뷰 수집 → 감정 분석 → 테마 추출 → 긍정/부정 분리 → 액션 아이템
  */
+import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 
 export interface ProductForReview {
   sku: string;
@@ -43,6 +44,13 @@ export interface ReviewAnalysisResult {
   ai_summary?: string;
 }
 
+export interface ReviewAnalysisPersisted extends ReviewAnalysisResult {
+  org_id: string;
+  country_code: string;
+  sku: string;
+  created_at: string;
+}
+
 function simpleHash(str: string): number {
   let h = 0;
   for (let i = 0; i < str.length; i++) {
@@ -64,6 +72,11 @@ const SAMPLE_TEXTS = [
   "친절한 안내 감사합니다",
   "반품 절차가 복잡해요",
 ];
+const reviewAnalysisStore = new Map<string, ReviewAnalysisPersisted>();
+
+function scopeKey(orgId?: string, countryCode?: string, sku?: string): string {
+  return `${(orgId ?? "default").trim() || "default"}:${(countryCode ?? "ALL").trim() || "ALL"}:${(sku ?? "").trim()}`;
+}
 
 export function collectReviewsAllChannels(product: ProductForReview): Review[] {
   const n = 15 + (simpleHash(product.sku) % 25);
@@ -234,5 +247,75 @@ export async function analyzeReviewsWithAiSummary(
   const result = analyzeReviews(product, _orgId, _countryCode);
   const reviews = collectReviewsAllChannels(product);
   const ai_summary = await generateAiReviewSummary(reviews);
-  return ai_summary ? { ...result, ai_summary } : result;
+  const finalResult = ai_summary ? { ...result, ai_summary } : result;
+  const orgId = (_orgId ?? "default").trim() || "default";
+  const countryCode = (_countryCode ?? "ALL").trim() || "ALL";
+  const createdAt = new Date().toISOString();
+  const persisted: ReviewAnalysisPersisted = {
+    ...finalResult,
+    org_id: orgId,
+    country_code: countryCode,
+    sku: product.sku,
+    created_at: createdAt,
+  };
+
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    await supabase.from("review_analyses").insert({
+      organization_id: orgId,
+      country_code: countryCode,
+      sku: product.sku,
+      overall_rating: finalResult.overall_rating,
+      sentiment_distribution: finalResult.sentiment_distribution,
+      positive_highlights: finalResult.positive_highlights,
+      improvement_areas: finalResult.improvement_areas,
+      action_items: finalResult.action_items,
+      review_volume_trend: finalResult.review_volume_trend,
+      total_reviews: finalResult.total_reviews,
+      ai_summary: finalResult.ai_summary ?? null,
+      created_at: createdAt,
+    });
+  }
+
+  reviewAnalysisStore.set(scopeKey(orgId, countryCode, product.sku), persisted);
+  return finalResult;
+}
+
+export async function getLatestReviewAnalysisAsync(orgId?: string, countryCode?: string, sku?: string): Promise<ReviewAnalysisPersisted | null> {
+  const key = scopeKey(orgId, countryCode, sku);
+  const local = reviewAnalysisStore.get(key);
+  if (local) return { ...local };
+  if (!sku) return null;
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const org = (orgId ?? "default").trim() || "default";
+  const country = (countryCode ?? "ALL").trim() || "ALL";
+  const { data, error } = await supabase
+    .from("review_analyses")
+    .select(
+      "organization_id, country_code, sku, overall_rating, sentiment_distribution, positive_highlights, improvement_areas, action_items, review_volume_trend, total_reviews, ai_summary, created_at"
+    )
+    .eq("organization_id", org)
+    .eq("country_code", country)
+    .eq("sku", sku)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const out: ReviewAnalysisPersisted = {
+    org_id: data.organization_id,
+    country_code: data.country_code,
+    sku: data.sku,
+    overall_rating: Number(data.overall_rating) || 0,
+    sentiment_distribution: data.sentiment_distribution as { positive: number; neutral: number; negative: number },
+    positive_highlights: (data.positive_highlights as Theme[]) ?? [],
+    improvement_areas: (data.improvement_areas as Theme[]) ?? [],
+    action_items: (data.action_items as ActionItem[]) ?? [],
+    review_volume_trend: data.review_volume_trend as ReviewVolumeTrend,
+    total_reviews: Number(data.total_reviews) || 0,
+    ai_summary: data.ai_summary ?? undefined,
+    created_at: data.created_at,
+  };
+  reviewAnalysisStore.set(key, out);
+  return { ...out };
 }

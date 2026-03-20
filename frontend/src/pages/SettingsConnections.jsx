@@ -32,7 +32,7 @@ function getPinVerified() {
   }
 }
 
-function setPinVerified() {
+function savePinVerifiedToStorage() {
   try {
     sessionStorage.setItem(CONNECTION_PIN_VERIFIED_KEY, String(Date.now()));
   } catch (_) {}
@@ -210,7 +210,7 @@ function ChannelAccountRow({
               type="text"
               value={allowlist}
               onChange={(e) => setAllowlist(e.target.value)}
-              placeholder="amazon, aliexpress, temu (비어두면 전부 허용)"
+              placeholder={t("settings.marketplacePlaceholder")}
               className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm"
             />
           </div>
@@ -652,7 +652,7 @@ export default function SettingsConnections() {
   const [pinInput, setPinInput] = useState("");
 
   const setPinVerified = (v) => {
-    if (v) setPinVerified();
+    if (v) savePinVerifiedToStorage();
     setPinVerifiedState(v);
   };
 

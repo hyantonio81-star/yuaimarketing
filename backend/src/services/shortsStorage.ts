@@ -4,17 +4,51 @@
  * - 미업로드(video_ready): 10일 보관, 최대 10만 건 상한 후 오래된 것부터 파일 삭제.
  * SHORTS_STORAGE_PATH 환경변수 또는 backend/data/shorts 사용.
  */
-import { mkdir, copyFile, rm } from "node:fs/promises";
+import { mkdir, copyFile, rm, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 
 const DEFAULT_SUBDIR = "shorts";
+const SUPABASE_BUCKET = "shorts-videos";
 
 function getStorageRoot(): string {
   const root = (process.env.SHORTS_STORAGE_PATH ?? "").trim();
   if (root) return root;
   const fromCwd = join(process.cwd(), "data", DEFAULT_SUBDIR);
   return fromCwd;
+}
+
+/** Supabase Storage에 파일 업로드 및 Public URL 반환 */
+async function uploadToSupabase(jobId: string, filePath: string): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  try {
+    const fileBuffer = await readFile(filePath);
+    const fileName = `${jobId}/final.mp4`;
+
+    const { data, error } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .upload(fileName, fileBuffer, {
+        contentType: "video/mp4",
+        upsert: true,
+      });
+
+    if (error) {
+      console.error("[Supabase Storage Upload Error]:", error);
+      return null;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from(SUPABASE_BUCKET)
+      .getPublicUrl(fileName);
+
+    return publicUrl;
+  } catch (err) {
+    console.error("[Supabase Storage error]:", err);
+    return null;
+  }
 }
 
 /** jobId별 디렉터리 경로 */
@@ -46,31 +80,47 @@ export function isExpired(expiresAt?: string): boolean {
 }
 
 /**
- * 소스 mp4를 저장 경로로 복사. 디렉터리 생성 후 복사.
- * @param retentionDays 업로드됨(done) 7일, 미업로드(video_ready) 10일 권장
- * @returns 저장된 경로와 만료일
+ * 소스 mp4를 저장 경로로 복사 및 Supabase 업로드.
+ * @returns 저장된 로컬 경로, Supabase URL(있는 경우), 만료일
  */
 export async function copyVideoToStorage(
   jobId: string,
   sourcePath: string,
   createdAt: string,
   retentionDays: number = RETENTION_DAYS_VIDEO_READY
-): Promise<{ videoPath: string; expiresAt: string }> {
+): Promise<{ videoPath: string; supabaseUrl?: string; expiresAt: string }> {
   const dir = getJobDir(jobId);
   const destPath = getVideoPath(jobId);
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true });
   }
   await copyFile(sourcePath, destPath);
+
+  // 백그라운드에서 Supabase Storage 업로드 시도
+  const supabaseUrl = await uploadToSupabase(jobId, destPath).catch(() => null);
+
   const expiresAt = getExpiresAt(createdAt, retentionDays);
-  return { videoPath: destPath, expiresAt };
+  return { 
+    videoPath: destPath, 
+    supabaseUrl: supabaseUrl || undefined, 
+    expiresAt 
+  };
 }
 
 /**
- * 해당 job의 저장 영상 파일(및 디렉터리) 삭제. 체크리스트용 job 메타는 호출측에서 유지.
+ * 해당 job의 저장 영상 파일(로컬 및 Supabase) 삭제.
  */
 export async function deleteVideoFile(jobId: string): Promise<void> {
+  // 로컬 삭제
   const dir = getJobDir(jobId);
-  if (!existsSync(dir)) return;
-  await rm(dir, { recursive: true, force: true });
+  if (existsSync(dir)) {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+
+  // Supabase 삭제
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const fileName = `${jobId}/final.mp4`;
+    await supabase.storage.from(SUPABASE_BUCKET).remove([fileName]).catch(() => {});
+  }
 }

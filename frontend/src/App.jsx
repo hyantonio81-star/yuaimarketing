@@ -13,7 +13,6 @@ import B2CCommerce from "./pages/B2CCommerce";
 import Ecommerce from "./pages/Ecommerce";
 import GovTender from "./pages/GovTender";
 import ShortsAgent from "./pages/ShortsAgent";
-import PlaceholderPillar from "./pages/PlaceholderPillar";
 import Links from "./pages/Links";
 import Landing from "./pages/Landing";
 import SettingsAccount from "./pages/SettingsAccount";

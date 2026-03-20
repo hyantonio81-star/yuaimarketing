@@ -99,6 +99,7 @@ export default function TiendaAdminList() {
               <tr className="border-b border-slate-700">
                 <th className="p-3 text-slate-400 font-medium">Imagen</th>
                 <th className="p-3 text-slate-400 font-medium">Título / Slug</th>
+                <th className="p-3 text-slate-400 font-medium">LOCAL/BOX</th>
                 <th className="p-3 text-slate-400 font-medium">Precio</th>
                 <th className="p-3 text-slate-400 font-medium">Visible</th>
                 <th className="p-3 text-slate-400 font-medium">Acciones</th>
@@ -118,6 +119,9 @@ export default function TiendaAdminList() {
                     <div className="font-medium text-white">{p.title}</div>
                     <div className="text-slate-500 text-xs">{p.slug}</div>
                   </td>
+                  <td className="p-3 text-slate-400 text-xs">
+                    {p.partner === "Carton DR" ? "BOX" : "LOCAL"}
+                  </td>
                   <td className="p-3 text-slate-300">{formatPrice(p)}</td>
                   <td className="p-3">
                     <span
@@ -131,7 +135,15 @@ export default function TiendaAdminList() {
                     </span>
                   </td>
                   <td className="p-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a
+                        href={`/tienda/${p.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-slate-400 hover:text-white text-sm"
+                      >
+                        Ver
+                      </a>
                       <Link
                         to={`/tienda-admin/edit/${p.id}`}
                         className="text-primary hover:underline text-sm"

@@ -13,9 +13,21 @@ export const API_BASE =
 export const SITE_NAME = "YUAI Marketop";
 export const SUPPORT_EMAIL = "hyantonio81@gmail.com";
 
+/** SNS profile URLs for Links page. Replace with real URLs or leave empty to hide. */
+export const INSTAGRAM_URL = "https://www.instagram.com/yuaimarketop";
+export const THREADS_URL = "https://www.threads.net/@yuaimarketop";
+export const FACEBOOK_URL = "https://www.facebook.com/yuaimarketop";
+
 /** Carton DR (B2B 카톤/박스) 전용 연락처 */
 export const CARTON_DR_NAME = "Carton DR";
 export const CARTON_DR_EMAIL = SUPPORT_EMAIL;
 export const CARTON_DR_WHATSAPP = "18295868282";
 export const CARTON_DR_PHONE_1 = "+1 829 586 8282";
 export const CARTON_DR_PHONE_2 = "+1 829 993 8985";
+
+/** Social Proof (통계/수치) 상수. 나중에 API 연동 가능 */
+export const SOCIAL_STATS = {
+  users: "10K+",
+  partners: "500+",
+  globalReach: "50+",
+};

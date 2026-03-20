@@ -13,7 +13,7 @@ import type {
   SegmentedAnalysisResult,
   NewsSummaryItem,
   TopCompanyDetail,
-} from "./marketIntelService.js";
+} from "./marketIntel/types.js";
 import { runMarketIntelSupervisor } from "./marketIntelAgents/index.js";
 import { buildTopCompanyDetails } from "./marketIntelService.js";
 

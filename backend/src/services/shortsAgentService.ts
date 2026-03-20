@@ -46,8 +46,8 @@ async function ensureJobsLoaded(): Promise<void> {
   jobsLoaded = true;
 }
 
-function persistJobs(): void {
-  saveJobsToFile(Array.from(JOBS.values())).catch(() => {});
+export async function persistJobs(): Promise<void> {
+  await saveJobsToFile(Array.from(JOBS.values())).catch(() => {});
 }
 
 /** 만료된 영상 파일 삭제 후 job은 체크리스트로 유지 (videoPath 제거, fileDeletedAt 기록) */
@@ -66,10 +66,10 @@ async function runCleanupExpiredFiles(): Promise<void> {
       // ignore per-job errors
     }
   }
-  if (changed) persistJobs();
+  if (changed) await persistJobs();
 }
 
-/** video_ready 보관 상한 초과 시 오래된 것부터 파일 삭제 (체크리스트는 유지). SHORTS_VIDEO_READY_MAX_COUNT 기본 100000 */
+/** video_ready 보관 상한 초과 시 오래된 것부터 파일 삭제 (체크리스트는 유지) */
 async function enforceVideoReadyCap(): Promise<void> {
   const cap = Math.max(1, parseInt(process.env.SHORTS_VIDEO_READY_MAX_COUNT ?? "100000", 10) || 100000);
   const withFile = Array.from(JOBS.values()).filter(
@@ -90,7 +90,7 @@ async function enforceVideoReadyCap(): Promise<void> {
       // ignore
     }
   }
-  if (changed) persistJobs();
+  if (changed) await persistJobs();
 }
 
 /** 라우트 등에서 사용: 만료된 영상 파일 정리 (410 전 호출 권장) */
@@ -100,14 +100,14 @@ export async function cleanupExpiredShortsFiles(): Promise<void> {
 }
 
 /** 라우트 등에서 사용: 파일이 이미 없을 때 job에서 videoPath 제거·fileDeletedAt 기록 (404 시 호출) */
-export function markJobVideoDeleted(jobId: string): void {
+export async function markJobVideoDeleted(jobId: string): Promise<void> {
   const job = JOBS.get(jobId);
   if (!job) return;
   if (job.videoPath != null) {
     job.videoPath = undefined;
     job.fileDeletedAt = new Date().toISOString();
     job.updatedAt = job.fileDeletedAt;
-    persistJobs();
+    await persistJobs();
   }
 }
 
@@ -123,13 +123,13 @@ function simpleHash(str: string): number {
 export { collectTrendTopics } from "./shorts/shortsTrendAgent.js";
 export { generateScriptForTopic } from "./shorts/shortsScriptAgent.js";
 
-/** 3) 비주얼 에이전트: 캐릭터 1인 + 장면 이미지 (기존 API 호환용) */
+/** 비주얼 에이전트: 캐릭터 1인 + 장면 이미지 (기존 API 호환용) */
 export async function generateImagesForScript(script: ShortsScript, avatarPresetId?: string) {
   const { sceneImages } = await generateVisualAssets(script, avatarPresetId);
   return sceneImages.map((r) => ({ sceneIndex: r.sceneIndex, imageUrl: r.imageUrl }));
 }
 
-/** 4) 영상 조립: 편집 에이전트 호출 (기존 시그니처 호환) */
+/** 영상 조립: 편집 에이전트 호출 (기존 시그니처 호환) */
 export async function assembleVideo(
   script: ShortsScript,
   sceneImages: { sceneIndex: number; imageUrl: string }[],
@@ -149,7 +149,7 @@ export async function assembleVideo(
   };
 }
 
-/** 5) YouTube 업로드: 배포 에이전트 호출 */
+/** YouTube 업로드: 배포 에이전트 호출 */
 export async function uploadToYouTube(
   videoPath: string,
   meta: { title: string; description?: string },
@@ -163,29 +163,25 @@ export interface RunPipelineOptions {
   youtubeKey?: string;
   enableTts?: boolean;
   noBgm?: boolean;
-  /** 음성: 성별·연령·톤 (추후 외부 TTS 연동 시 사용) */
   voiceGender?: "female" | "male" | "neutral";
   voiceAge?: "child" | "young" | "adult" | "mature";
   voiceTone?: "bright" | "warm" | "calm" | "friendly" | "authoritative";
   voiceSpeed?: number;
   voicePitch?: "high" | "medium" | "low";
-  /** 포맷: shorts(기본) / long(1~3분) */
   format?: "shorts" | "long";
   targetDurationSeconds?: number;
-  /** 업로드 모드: immediate(기본) 즉시 업로드, review_first 영상만 저장 후 사용자 업로드 */
   uploadMode?: "immediate" | "review_first";
-  /** 캐릭터 이미지 톤 */
   characterAge?: "child" | "young" | "adult" | "mature";
   characterGender?: "female" | "male" | "neutral";
-  /** BGM */
   bgmGenre?: string;
   bgmMood?: string;
   bgmVolume?: number;
-  /** 배포할 플랫폼 (기본 youtube). youtube, tiktok, instagram, facebook */
   platforms?: DeployPlatform[];
 }
 
-/** 파이프라인 1회 실행: 트렌드 → 스크립트 → 비주얼 → 보이스 → BGM → 편집 → 배포 */
+/**
+ * 비동기 파이프라인 실행: jobId를 즉시 반환하고 백그라운드에서 작업을 계속함 (Vercel 타임아웃 방지)
+ */
 export async function runPipelineOnce(keywords: string[], options?: RunPipelineOptions): Promise<ShortsPipelineJob> {
   await ensureJobsLoaded();
   const defaults = options?.youtubeKey ? await getChannelDefaults(options.youtubeKey) : null;
@@ -209,6 +205,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     bgmVolume = defaults?.bgmVolume ?? 0.15,
     platforms = ["youtube"],
   } = options ?? {};
+
   const uploadMode = uploadModeOpt ?? (defaults?.autoUpload === false ? "review_first" : "immediate");
   const merged = {
     avatarPresetId,
@@ -230,6 +227,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     bgmVolume: bgmVolume ?? defaults?.bgmVolume ?? 0.15,
     platforms: platforms?.length ? platforms : ["youtube"],
   };
+
   const jobId = `job-${Date.now()}-${simpleHash(keywords.join(","))}`;
   const now = new Date().toISOString();
   const job: ShortsPipelineJob = {
@@ -239,19 +237,36 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     updatedAt: now,
   };
   JOBS.set(jobId, job);
-  persistJobs();
+  await persistJobs();
+
+  // 백그라운드 실행
+  runPipelineInternal(jobId, keywords, merged).catch((err) => {
+    console.error(`[Pipeline Error] ${jobId}:`, err);
+  });
+
+  return job;
+}
+
+/** 실제 파이프라인 로직 (내부용) */
+async function runPipelineInternal(jobId: string, keywords: string[], merged: any): Promise<void> {
+  const job = JOBS.get(jobId);
+  if (!job) return;
 
   try {
     job.status = "collecting";
     job.updatedAt = new Date().toISOString();
+    await persistJobs();
+
     const topics = await collectTrendTopics(keywords.length ? keywords : ["YouTube Shorts", "트렌드"]);
     const topic = topics[0];
     job.topic = topic;
 
     job.status = "script";
     job.updatedAt = new Date().toISOString();
-    const script = generateScriptForTopic(topic, avatarPresetId, {
-      avatarPresetId,
+    await persistJobs();
+
+    const script = generateScriptForTopic(topic, merged.avatarPresetId, {
+      avatarPresetId: merged.avatarPresetId,
       format: merged.format,
       targetDurationSeconds: merged.targetDurationSeconds,
       characterAge: merged.characterAge,
@@ -261,10 +276,14 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
 
     job.status = "images";
     job.updatedAt = new Date().toISOString();
-    const { sceneImages } = await generateVisualAssets(script, avatarPresetId);
+    await persistJobs();
+    const { sceneImages } = await generateVisualAssets(script, merged.avatarPresetId);
 
     let sceneAudios: { sceneIndex: number; audioPath: string | null }[] = [];
-    if (enableTts) {
+    if (merged.enableTts) {
+      job.status = "voice";
+      job.updatedAt = new Date().toISOString();
+      await persistJobs();
       sceneAudios = await generateSceneAudios(script.scenes, {
         voice: {
           voiceGender: merged.voiceGender,
@@ -286,6 +305,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
 
     job.status = "video";
     job.updatedAt = new Date().toISOString();
+    await persistJobs();
     const videoMeta = await editAssembleVideo({
       script,
       sceneImages,
@@ -295,7 +315,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     });
 
     if (merged.uploadMode === "review_first") {
-      const { videoPath: storedPath, expiresAt } = await copyVideoToStorage(
+      const { videoPath: storedPath, supabaseUrl, expiresAt } = await copyVideoToStorage(
         jobId,
         videoMeta.videoPath,
         job.createdAt,
@@ -303,15 +323,17 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
       );
       job.status = "video_ready";
       job.videoPath = storedPath;
+      job.supabaseUrl = supabaseUrl;
       job.expiresAt = expiresAt;
       job.updatedAt = new Date().toISOString();
-      persistJobs();
+      await persistJobs();
       await enforceVideoReadyCap();
-      return job;
+      return;
     }
 
     job.status = "upload";
     job.updatedAt = new Date().toISOString();
+    await persistJobs();
     const meta = {
       title: script.topicTitle.slice(0, 100),
       description: script.hook + "\n\n" + script.scenes.map((s) => s.text).join("\n"),
@@ -319,7 +341,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     const { results } = await deployToPlatforms(
       videoMeta.videoPath,
       meta,
-      merged.platforms as DeployPlatform[],
+      merged.platforms,
       merged.youtubeKey
     );
     const deployedUrls: Record<string, string> = {};
@@ -330,27 +352,26 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     job.videoUrl = job.deployedUrls?.youtube ?? Object.values(deployedUrls)[0];
 
     job.status = "done";
-    const { videoPath: storedPath, expiresAt } = await copyVideoToStorage(
+    const { videoPath: storedPath, supabaseUrl, expiresAt } = await copyVideoToStorage(
       jobId,
       videoMeta.videoPath,
       job.createdAt,
       RETENTION_DAYS_UPLOADED
     );
     job.videoPath = storedPath;
+    job.supabaseUrl = supabaseUrl;
     job.expiresAt = expiresAt;
     job.updatedAt = new Date().toISOString();
-    persistJobs();
+    await persistJobs();
   } catch (err) {
     job.status = "failed";
     job.error = err instanceof Error ? err.message : String(err);
     job.updatedAt = new Date().toISOString();
-    persistJobs();
+    await persistJobs();
   }
-
-  return job;
 }
 
-/** video_ready 상태 job을 선택 플랫폼에 업로드. 성공 시 done 처리 및 저장 경로 유지 */
+/** video_ready 상태 job을 선택 플랫폼에 업로드 */
 export async function uploadJob(
   jobId: string,
   youtubeKey: string = "default",
@@ -360,7 +381,7 @@ export async function uploadJob(
   const job = JOBS.get(jobId);
   if (!job) throw new Error("Job not found");
   if (job.status !== "video_ready" || !job.videoPath || !job.script) {
-    throw new Error("Job is not ready for upload (status must be video_ready with videoPath and script)");
+    throw new Error("Job is not ready for upload");
   }
   const meta = {
     title: job.script.topicTitle.slice(0, 100),
@@ -377,7 +398,7 @@ export async function uploadJob(
   job.status = "done";
   job.expiresAt = getExpiresAt(new Date().toISOString(), RETENTION_DAYS_UPLOADED);
   job.updatedAt = new Date().toISOString();
-  persistJobs();
+  await persistJobs();
   return job;
 }
 
@@ -404,7 +425,6 @@ export function getJob(jobId: string): ShortsPipelineJob | undefined {
   return JOBS.get(jobId);
 }
 
-/** 저장된 영상 목록: videoPath 있고 (done 또는 video_ready), 만료되지 않은 job. 만료된 파일은 먼저 정리 후 반환 */
 export async function getLibrary(): Promise<ShortsPipelineJob[]> {
   await ensureJobsLoaded();
   await runCleanupExpiredFiles();
@@ -413,7 +433,6 @@ export async function getLibrary(): Promise<ShortsPipelineJob[]> {
     .sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
 }
 
-/** 체크리스트: 파일 삭제된 항목 포함 (업로드 로그·미업로드 삭제 알림). videoPath 없거나 fileDeletedAt 있음 */
 export async function getChecklist(limit = 100): Promise<ShortsPipelineJob[]> {
   await ensureJobsLoaded();
   await runCleanupExpiredFiles();

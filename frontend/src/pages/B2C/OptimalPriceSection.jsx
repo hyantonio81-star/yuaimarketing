@@ -4,7 +4,7 @@ import SectionCard from "../../components/SectionCard";
 import { api, getApiErrorMessage } from "../../lib/api";
 import { useLanguage } from "../../context/LanguageContext.jsx";
 
-const DEFAULT_PRICE_CHANNELS = ["Coupang", "Naver SmartStore", "Shopify", "Amazon", "11번가"];
+const DEFAULT_PRICE_CHANNELS = ["Coupang", "Naver SmartStore", "Shopify", "Amazon", "11st"];
 
 function getError(t, e) {
   return getApiErrorMessage(e, t("b2cCommerce.errSkuCostMargin"));

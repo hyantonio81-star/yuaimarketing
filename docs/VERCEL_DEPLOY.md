@@ -40,6 +40,7 @@ Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variable
 | `VITE_API_URL` | *(비움)* 또는 `https://your-app.vercel.app` | 비우면 같은 도메인 `/api` 사용 권장 |
 | `VITE_SUPABASE_URL` | Supabase 프로젝트 URL | Supabase 연동 시 그대로 사용 가능 |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key | Supabase 연동 시 그대로 사용 가능 |
+| `VITE_REQUIRE_LOGIN` | `true` | 접속 시 항상 로그인 화면 먼저 노출(권장) |
 
 ### 백엔드(API) – 서버리스 함수
 
@@ -48,6 +49,7 @@ Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variable
 | `SUPABASE_URL` | Supabase 프로젝트 URL | 프론트와 동일 |
 | `SUPABASE_ANON_KEY` | Supabase anon key | 프론트와 동일 |
 | `SUPABASE_SERVICE_ROLE_KEY` | *(선택)* service_role 키 | 관리자 작업 필요 시만 |
+| `ALLOWED_ORIGINS` | `https://your-app.vercel.app` | CORS 허용 오리진(쉼표 구분). 미설정 시 모든 오리진 허용 |
 
 **Supabase 연동**을 이미 했다면, Vercel에서 Supabase 변수를 불러와서 위 이름에 맞게 매핑해 두면 됩니다.
 
@@ -104,6 +106,18 @@ Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variable
 - **Supabase Integration**을 Vercel에 연결했다면, 변수 이름이 위와 일치하는지 확인.  
   다르면 **Override** 또는 수동으로 위 이름으로 추가.
 - 환경 변수 수정 후에는 **Redeploy** 필요 (특히 `VITE_*`는 빌드 시 주입됨).
+
+---
+
+## 8. 첫 배포 후 보안 점검
+
+배포가 끝나면 다음을 한 번씩 확인하세요. 자세한 내용은 [SECURITY.md](./SECURITY.md) §3 보안 권장 체크리스트를 참고하세요.
+
+| 항목 | 설정 위치 | 예시 |
+|------|-----------|------|
+| **첫 접속 시 로그인** | Vercel 환경 변수 | `VITE_REQUIRE_LOGIN=true` → 재배포 후 시크릿 창에서 접속 시 로그인 화면으로 이동하는지 확인 |
+| **CORS** | Vercel 환경 변수(API 런타임) | `ALLOWED_ORIGINS=https://yuaimarketing.vercel.app` (복수 도메인은 쉼표 구분). 미설정 시 모든 오리진 허용 |
+| **Admin bootstrap** | 첫 관리자 생성 후 | `ADMIN_BOOTSTRAP_ENABLED=false` 설정 또는 변수 제거 |
 
 ---
 

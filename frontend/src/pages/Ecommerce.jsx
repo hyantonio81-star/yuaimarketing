@@ -49,7 +49,7 @@ export default function Ecommerce() {
       setMessage(t("ecommerce.connectSuccess"));
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
-      setError(err?.response?.data?.error ?? err?.message ?? "연동 실패");
+      setError(err?.response?.data?.error ?? err?.message ?? t("settings.connectFailed"));
     } finally {
       setConnecting(false);
     }
@@ -66,7 +66,7 @@ export default function Ecommerce() {
       setMessage(t("ecommerce.disconnectSuccess"));
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
-      setError(err?.response?.data?.error ?? err?.message ?? "해제 실패");
+      setError(err?.response?.data?.error ?? err?.message ?? t("settings.disconnectFailed"));
     } finally {
       setDisconnecting(false);
     }

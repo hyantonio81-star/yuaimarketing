@@ -3,6 +3,7 @@ import Layout from "../components/Layout";
 import { useLanguage } from "../context/LanguageContext";
 import { ALL_PRODUCTS } from "../lib/constants";
 import { API_BASE } from "../lib/config";
+import { useSeoMeta } from "../lib/seo";
 
 const TREND_MONTHS = ["S", "O", "N", "D", "J", "F"];
 
@@ -13,6 +14,14 @@ export default function ProductPage() {
   const { slug } = useParams();
   const { t } = useLanguage();
   const product = ALL_PRODUCTS.find((p) => p.slug === slug);
+
+  useSeoMeta({
+    title: product ? product.title : t("products.noResults"),
+    description: product ? product.description : t("product.description"),
+    path: product ? `/p/${product.slug}` : "/products",
+    image: product?.image,
+    noIndex: !product,
+  });
 
   if (!product) {
     return (
@@ -44,8 +53,9 @@ export default function ProductPage() {
           <div className="aspect-[4/3] sm:aspect-[2/1] bg-slate-700 relative">
             <img
               src={product.image}
-              alt=""
+              alt={product.title}
               className="w-full h-full object-cover"
+              onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&h=400&fit=crop"; }}
             />
             {product.analysisUpdated && (
               <div className="absolute top-3 right-3 rounded-lg bg-slate-900/90 px-2.5 py-1 text-xs text-slate-400">

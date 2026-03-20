@@ -51,6 +51,29 @@ Threads Commerce와 콘텐츠 자동화에서 **상품 링크에 제휴·추적 
 | **환경변수 대안** | `GO_AMAZON_PICK=https://...` 처럼 `GO_` + id(하이픈→언더스코어, 대문자) 로도 설정 가능 |
 | **효과** | Amazon/쉬인 등이 제휴 URL 정책을 바꿔도 `redirects.json`(또는 env)만 수정하면 됨 |
 
+#### 4.1 클로킹 규칙 (Pretty Links 스타일)
+
+- **노출용 URL**: 포스트·광고·바이오에는 반드시 **`https://www.yuaimarketop.com/go/[id]`** 형태만 사용합니다.  
+  예: `yuaimarketop.com/go/amazon-pick`, `yuaimarketop.com/go/shein-dress`
+- **목적지 변경**: 제휴사 URL이 바뀌어도 **포스트/광고는 수정하지 않고**, 서버 쪽만 수정합니다.  
+  → `backend/data/redirects.json` 또는 환경변수 `GO_AMAZON_PICK=...` 등만 갱신.
+- **ID 규칙**: `[id]`는 소문자·하이픈 권장 (예: `amazon-pick`). 환경변수는 `GO_` + 대문자·언더스코어 (예: `GO_AMAZON_PICK`).
+
+**redirects.json 예시** (`backend/data/redirects.json`):
+
+```json
+{
+  "amazon-pick": "https://www.amazon.com/...?tag=yoursite-20",
+  "shein-dress": "https://us.shein.com/...",
+  "temu-pick": "https://www.temu.com/..."
+}
+```
+
+**환경변수 예시** (Vercel/서버):
+
+- `GO_AMAZON_PICK=https://www.amazon.com/...?tag=yoursite-20`
+- `GO_SHEIN_DRESS=https://us.shein.com/...`
+
 자세한 사이트 구조는 [YUAIMARKETOP_HOMEPAGE_기획.md](./YUAIMARKETOP_HOMEPAGE_기획.md) §2·§6 참고.
 
 ---

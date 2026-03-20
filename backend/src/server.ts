@@ -21,23 +21,31 @@ import { govRoutes } from "./routes/gov.js";
 import { shortsRoutes } from "./routes/shorts.js";
 import { goRedirectRoutes } from "./routes/goRedirect.js";
 import { drProductsRoutes } from "./routes/drProducts.js";
+import { landingRoutes } from "./routes/landing.js";
 import { nexusRoutes } from "./routes/nexus.js";
 import { marketRoutes } from "./routes/market.js";
 import { adminRoutes } from "./routes/admin.js";
 import { contentAutomationRoutes } from "./routes/contentAutomation.js";
 import { userSettingsRoutes } from "./routes/userSettings.js";
-import { registerRoutes } from "./routes/index.js";
+import { kpiRoutes } from "./routes/kpi.js";
 import { getSupabaseAdmin } from "./lib/supabaseServer.js";
 import { startDailyRoutineScheduler } from "./jobs/dailyRoutineScheduler.js";
 
 const fastify = Fastify({
-  logger: true
+  logger: true,
+  trustProxy: true,
 });
 
 async function buildServer() {
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.trim();
+  const allowedOriginList = allowedOrigins
+    ? allowedOrigins.split(",").map((o) => o.trim()).filter(Boolean)
+    : [];
+  if (allowedOriginList.length === 0) {
+    fastify.log.warn("ALLOWED_ORIGINS is empty. CORS is disabled until explicit origins are configured.");
+  }
   await fastify.register(cors, {
-    origin: allowedOrigins ? allowedOrigins.split(",").map((o) => o.trim()).filter(Boolean) : true,
+    origin: allowedOriginList.length > 0 ? allowedOriginList : false,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Organization-Id", "X-Country"],
@@ -57,8 +65,6 @@ async function buildServer() {
     return { status: "ok", service: "yuanto-ai-backend", supabase: supabaseStatus };
   });
 
-  registerRoutes(fastify);
-
   await fastify.register(dashboardRoutes, { prefix: "/api" });
   await fastify.register(marketIntelRoutes, { prefix: "/api/market-intel" });
   await fastify.register(competitorRoutes, { prefix: "/api/competitors" });
@@ -70,11 +76,13 @@ async function buildServer() {
   await fastify.register(shortsRoutes, { prefix: "/api/shorts" });
   await fastify.register(goRedirectRoutes, { prefix: "/api" });
   await fastify.register(drProductsRoutes, { prefix: "/api/landing" });
+  await fastify.register(landingRoutes, { prefix: "/api/landing" });
   await fastify.register(nexusRoutes, { prefix: "/api/nexus" });
   await fastify.register(marketRoutes, { prefix: "/api/markets" });
   await fastify.register(adminRoutes, { prefix: "/api/admin" });
   await fastify.register(contentAutomationRoutes, { prefix: "/api/content-automation" });
   await fastify.register(userSettingsRoutes, { prefix: "/api/user" });
+  await fastify.register(kpiRoutes, { prefix: "/api/kpi" });
 
   /** PC/서버용: 프론트엔드 빌드 정적 서빙 (같은 포트에서 API + SPA 제공) */
   const candidates = [

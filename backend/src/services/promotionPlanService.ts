@@ -2,6 +2,7 @@
  * plan_promotion: AI 기반 프로모션 전략 수립
  * 시나리오: 할인율 변화(5~30%), BOGO, 번들 → 목표별 최적 선택 → 실행 계획(일정, 카피, 채널, 예산)
  */
+import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 
 export type PromotionGoal = "revenue" | "profit" | "clearance";
 
@@ -41,7 +42,19 @@ export interface PromotionPlanResult {
   goal: PromotionGoal;
 }
 
+export interface PromotionPlanPersisted extends PromotionPlanResult {
+  org_id: string;
+  country_code: string;
+  sku: string;
+  created_at: string;
+}
+
 const PROMO_COPY_TIMEOUT_MS = 10_000;
+const promotionPlanStore = new Map<string, PromotionPlanPersisted>();
+
+function scopeKey(orgId?: string, countryCode?: string, sku?: string): string {
+  return `${(orgId ?? "default").trim() || "default"}:${(countryCode ?? "ALL").trim() || "ALL"}:${(sku ?? "").trim()}`;
+}
 
 function simpleHash(str: string): number {
   let h = 0;
@@ -253,15 +266,75 @@ export async function planPromotionWithAiCopy(
 ): Promise<PromotionPlanResult> {
   const result = planPromotion(product, goal, _orgId, _countryCode);
   const aiCopy = await generatePromoCopyWithLLM(result.recommendation, product);
-  if (aiCopy) {
-    return {
-      ...result,
-      execution_plan: {
-        ...result.execution_plan,
-        messaging: aiCopy,
-        ai_messaging: true,
-      },
-    };
+  const finalResult = aiCopy
+    ? {
+        ...result,
+        execution_plan: {
+          ...result.execution_plan,
+          messaging: aiCopy,
+          ai_messaging: true,
+        },
+      }
+    : result;
+
+  const orgId = (_orgId ?? "default").trim() || "default";
+  const countryCode = (_countryCode ?? "ALL").trim() || "ALL";
+  const createdAt = new Date().toISOString();
+  const persisted: PromotionPlanPersisted = {
+    ...finalResult,
+    org_id: orgId,
+    country_code: countryCode,
+    sku: product.sku,
+    created_at: createdAt,
+  };
+
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    await supabase.from("promotion_plans").insert({
+      organization_id: orgId,
+      country_code: countryCode,
+      sku: product.sku,
+      goal,
+      recommendation: finalResult.recommendation,
+      all_scenarios: finalResult.all_scenarios,
+      execution_plan: finalResult.execution_plan,
+      created_at: createdAt,
+    });
   }
-  return result;
+
+  promotionPlanStore.set(scopeKey(orgId, countryCode, product.sku), persisted);
+  return finalResult;
+}
+
+export async function getLatestPromotionPlanAsync(orgId?: string, countryCode?: string, sku?: string): Promise<PromotionPlanPersisted | null> {
+  const key = scopeKey(orgId, countryCode, sku);
+  const local = promotionPlanStore.get(key);
+  if (local) return { ...local };
+  if (!sku) return null;
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const org = (orgId ?? "default").trim() || "default";
+  const country = (countryCode ?? "ALL").trim() || "ALL";
+  const { data, error } = await supabase
+    .from("promotion_plans")
+    .select("organization_id, country_code, sku, goal, recommendation, all_scenarios, execution_plan, created_at")
+    .eq("organization_id", org)
+    .eq("country_code", country)
+    .eq("sku", sku)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const out: PromotionPlanPersisted = {
+    org_id: data.organization_id,
+    country_code: data.country_code,
+    sku: data.sku,
+    goal: data.goal as PromotionGoal,
+    recommendation: data.recommendation as PromotionScenario,
+    all_scenarios: (data.all_scenarios as PromotionScenario[]) ?? [],
+    execution_plan: data.execution_plan as ExecutionPlan,
+    created_at: data.created_at,
+  };
+  promotionPlanStore.set(key, out);
+  return { ...out };
 }

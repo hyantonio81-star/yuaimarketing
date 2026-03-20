@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { requireUser } from "../lib/auth.js";
 import { monitorKoreaProcurement } from "../services/koreaProcurementService.js";
 import { monitorInternationalTendersAsync } from "../services/internationalTendersService.js";
 import { checkQualification } from "../services/tenderQualificationService.js";
@@ -28,6 +29,11 @@ interface GenerateProposalBody {
 }
 
 export async function govRoutes(fastify: FastifyInstance) {
+  fastify.addHook("preHandler", async (req, reply) => {
+    const user = await requireUser(req, reply);
+    if (!user) return reply;
+  });
+
   /** 수동 모드: GOV_TENDER_ENABLED !== 'true' 이면 API는 503 + manual 메시지 반환 */
   fastify.get("/status", async () => ({
     mode: GOV_TENDER_ENABLED ? "active" : "manual",

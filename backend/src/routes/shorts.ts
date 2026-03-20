@@ -22,6 +22,10 @@ import {
   cleanupExpiredShortsFiles,
   markJobVideoDeleted,
 } from "../services/shortsAgentService.js";
+import {
+  addToDistributionQueue,
+  getDistributionQueue,
+} from "../services/shortsDistributionService.js";
 import { isExpired } from "../services/shortsStorage.js";
 import { DEPLOY_PLATFORMS } from "../services/shorts/shortsDeployAgent.js";
 import {
@@ -312,21 +316,30 @@ export async function shortsRoutes(app: FastifyInstance) {
     return job;
   });
 
-  /** 저장된 영상 스트리밍/다운로드 */
+  /** 저장된 영상 스트리밍/다운로드 (로컬 파일 우선, 없으면 Supabase URL로 리다이렉트) */
   app.get<{ Params: { jobId: string } }>("/jobs/:jobId/video", async (request: FastifyRequest<{ Params: { jobId: string } }>, reply: FastifyReply) => {
     await getJobAsync(request.params.jobId);
     const job = getJob(request.params.jobId);
     if (!job) return reply.code(404).send({ error: "Job not found" });
-    if (!job.videoPath || !existsSync(job.videoPath)) {
-      markJobVideoDeleted(request.params.jobId);
-      return reply.code(404).send({ error: "Video file not found" });
+
+    // 1. 로컬 파일 확인
+    if (job.videoPath && existsSync(job.videoPath)) {
+      if (job.expiresAt && isExpired(job.expiresAt)) {
+        await cleanupExpiredShortsFiles();
+        return reply.code(410).send({ error: "Video expired" });
+      }
+      const stream = createReadStream(job.videoPath);
+      return reply.header("Content-Type", "video/mp4").send(stream);
     }
-    if (job.expiresAt && isExpired(job.expiresAt)) {
-      await cleanupExpiredShortsFiles();
-      return reply.code(410).send({ error: "Video expired" });
+
+    // 2. 로컬 파일 없고 Supabase URL 있으면 리다이렉트
+    if (job.supabaseUrl) {
+      return reply.redirect(job.supabaseUrl);
     }
-    const stream = createReadStream(job.videoPath);
-    return reply.header("Content-Type", "video/mp4").send(stream);
+
+    // 3. 둘 다 없으면 삭제 처리 후 404
+    markJobVideoDeleted(request.params.jobId);
+    return reply.code(404).send({ error: "Video file not found" });
   });
 
   /** video_ready 작업 수동 업로드 (다중 플랫폼 선택 가능) */
@@ -341,5 +354,33 @@ export async function shortsRoutes(app: FastifyInstance) {
     } catch (e) {
       return reply.code(400).send({ error: e instanceof Error ? e.message : "Upload failed" });
     }
+  });
+
+  /** 배포 대기열에 추가 (복수 작업 지원) */
+  app.post<{ Body: { jobIds: string[]; platforms: string[]; scheduledAt?: string } }>(
+    "/distribution/queue",
+    async (request, reply) => {
+      const { jobIds, platforms, scheduledAt } = request.body;
+      if (!jobIds?.length || !platforms?.length) {
+        return reply.code(400).send({ error: "jobIds and platforms required" });
+      }
+
+      const results = [];
+      for (const jobId of jobIds) {
+        try {
+          const items = await addToDistributionQueue(jobId, platforms, { scheduledAt });
+          results.push({ jobId, success: true, items });
+        } catch (e) {
+          results.push({ jobId, success: false, error: (e as Error).message });
+        }
+      }
+      return { results };
+    }
+  );
+
+  /** 배포 대기열 조회 */
+  app.get("/distribution/queue", async () => {
+    const queue = await getDistributionQueue();
+    return { queue };
   });
 }

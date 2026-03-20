@@ -1,301 +1,165 @@
 import { Link } from "react-router-dom";
+import Layout from "../components/Layout";
 import { useLanguage } from "../context/LanguageContext";
-import LanguageSwitcher from "../components/LanguageSwitcher";
-import {
-  CARTON_DR_NAME,
-  CARTON_DR_EMAIL,
-  CARTON_DR_WHATSAPP,
-  CARTON_DR_PHONE_1,
-  CARTON_DR_PHONE_2,
-  SITE_NAME,
-} from "../lib/config";
+import { CARTON_DR_NAME, CARTON_DR_WHATSAPP } from "../lib/config";
+import { useSeoMeta } from "../lib/seo";
+
+const DEFAULT_IMG = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&h=400&fit=crop";
+const HERO_IMG = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&h=600&fit=crop";
 
 const CATEGORIES = [
-  {
-    id: "agricola",
-    image: "https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=600&h=400&fit=crop",
-    titleKey: "cartonDr.catAgricola",
-    descKey: "cartonDr.catAgricolaDesc",
-  },
-  {
-    id: "alimentos",
-    image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop",
-    titleKey: "cartonDr.catAlimentos",
-    descKey: "cartonDr.catAlimentosDesc",
-  },
-  {
-    id: "varios",
-    image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&h=400&fit=crop",
-    titleKey: "cartonDr.catVarios",
-    descKey: "cartonDr.catVariosDesc",
-  },
+  { id: "agricola", image: "https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=600&h=400&fit=crop", titleKey: "cartonDr.catAgricola", descKey: "cartonDr.catAgricolaDesc" },
+  { id: "alimentos", image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=400&fit=crop", titleKey: "cartonDr.catAlimentos", descKey: "cartonDr.catAlimentosDesc" },
+  { id: "varios", image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&h=400&fit=crop", titleKey: "cartonDr.catVarios", descKey: "cartonDr.catVariosDesc" },
 ];
 
-/** 사이드바 이미지 모듈: 클릭 시 해당 섹션 또는 페이지로 이동 */
-const SIDEBAR_MODULES = [
-  { type: "hash", id: "agricola", image: CATEGORIES[0].image, titleKey: "cartonDr.catAgricola" },
-  { type: "hash", id: "alimentos", image: CATEGORIES[1].image, titleKey: "cartonDr.catAlimentos" },
-  { type: "hash", id: "varios", image: CATEGORIES[2].image, titleKey: "cartonDr.catVarios" },
-  {
-    type: "route",
-    path: "/blog",
-    image: "https://images.unsplash.com/photo-1499750310107-5efef85a6065?w=400&h=250&fit=crop",
-    titleKey: "cartonDr.blog",
-  },
-  {
-    type: "route",
-    path: "/tienda",
-    image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=250&fit=crop",
-    titleKey: "cartonDr.eShop",
-  },
-  { type: "hash", id: "about", image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=250&fit=crop", titleKey: "cartonDr.about" },
-  { type: "hash", id: "faq", image: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=400&h=250&fit=crop", titleKey: "cartonDr.faq" },
-  { type: "route", path: "/contact", image: "https://images.unsplash.com/photo-1423666639041-f56000c27a9a?w=400&h=250&fit=crop", titleKey: "cartonDr.contact" },
+/** 사이드바 메뉴: 텍스트 링크만 (다른 페이지와 동일한 상담뷰 라인) */
+const SIDEBAR_LINKS = [
+  { to: "/carton-dr#about", labelKey: "cartonDr.about" },
+  { to: "/carton-dr#categorias", labelKey: "cartonDr.categoriesTitle" },
+  { to: "/carton-dr#faq", labelKey: "cartonDr.faq" },
+  { to: "/tienda", labelKey: "cartonDr.eShop" },
+  { to: "/blog", labelKey: "cartonDr.blog" },
+  { to: "/contact", labelKey: "cartonDr.contact" },
 ];
 
 export default function CartonDR() {
   const { t } = useLanguage();
   const whatsappUrl = `https://wa.me/${CARTON_DR_WHATSAPP}`;
 
+  useSeoMeta({
+    title: CARTON_DR_NAME,
+    description:
+      "Soluciones en empaque y carton para la industria. Cajas para agricola, alimentos y usos varios en Republica Dominicana.",
+    path: "/carton-dr",
+    image: HERO_IMG,
+  });
+
+  const imgProps = (alt) => ({
+    alt,
+    onError: (e) => { e.target.onerror = null; e.target.src = DEFAULT_IMG; },
+  });
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-900">
-      {/* Top bar — 연락처 */}
-      <div className="bg-slate-800 border-b border-slate-700/50">
-        <div className="max-w-6xl mx-auto px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-sm">
-          <span className="font-semibold text-white">{CARTON_DR_NAME}</span>
-          <div className="flex flex-wrap items-center gap-4 text-slate-300">
-            <a href={`mailto:${CARTON_DR_EMAIL}`} className="hover:text-white transition-colors">
-              {CARTON_DR_EMAIL}
-            </a>
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-white transition-colors"
-            >
-              {CARTON_DR_PHONE_1}
-            </a>
-            <a href={`tel:${CARTON_DR_PHONE_2.replace(/\s/g, "")}`} className="hover:text-white transition-colors">
-              {CARTON_DR_PHONE_2}
-            </a>
-          </div>
-        </div>
-      </div>
-
-      {/* Header — 로고 + 네비 */}
-      <header className="border-b border-slate-700/50 bg-slate-900/90 backdrop-blur-xl sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <Link
-            to="/carton-dr"
-            className="text-xl font-bold text-white hover:text-primary transition-colors shrink-0"
-          >
-            {CARTON_DR_NAME}
-          </Link>
-          <nav className="flex items-center gap-4">
-            <Link to="/carton-dr#about" className="text-slate-400 hover:text-white text-sm">
-              {t("cartonDr.about")}
-            </Link>
-            <Link to="/blog" className="text-slate-400 hover:text-white text-sm">
-              {t("cartonDr.blog")}
-            </Link>
-            <Link to="/blog" className="text-slate-400 hover:text-white text-sm">
-              {t("cartonDr.casosExito")}
-            </Link>
-            <Link to="/tienda" className="text-slate-400 hover:text-white text-sm">
-              {t("cartonDr.eShop")}
-            </Link>
-            <Link to="/carton-dr#faq" className="text-slate-400 hover:text-white text-sm">
-              {t("cartonDr.faq")}
-            </Link>
-            <Link to="/contact" className="text-slate-400 hover:text-white text-sm">
-              {t("cartonDr.contact")}
-            </Link>
-            <LanguageSwitcher />
-          </nav>
-        </div>
-      </header>
-
-      {/* 레이아웃: 왼쪽 사이드바(이미지 모듈) + 메인 콘텐츠 */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-        {/* 왼쪽 사이드바 — 이미지 모듈 네비게이션 */}
-        <aside className="lg:w-56 xl:w-64 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-700/50 bg-slate-900/50 lg:sticky lg:top-[53px] lg:self-start lg:max-h-[calc(100vh-53px)] lg:overflow-y-auto">
-          <nav className="flex lg:flex-col gap-0 p-2 lg:p-3 overflow-x-auto lg:overflow-x-visible lg:overflow-y-auto" aria-label={t("cartonDr.categoriesTitle")}>
-            {SIDEBAR_MODULES.map((mod) => (
-              mod.type === "hash" ? (
-                <a
-                  key={mod.id}
-                  href={`#${mod.id}`}
-                  className="group flex flex-col lg:flex-row items-center gap-2 shrink-0 lg:shrink-0 w-28 lg:w-full lg:rounded-xl lg:border lg:border-slate-700 lg:bg-slate-800/50 lg:overflow-hidden lg:mb-2 hover:border-primary/50 hover:shadow-lg transition-all duration-300"
-                  aria-label={t(mod.titleKey)}
-                >
-                  <div className="w-20 h-14 lg:w-full lg:aspect-[16/10] bg-slate-700 overflow-hidden rounded-lg lg:rounded-none">
-                    <img src={mod.image} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                  </div>
-                  <span className="text-xs lg:text-sm font-medium text-slate-300 group-hover:text-primary px-2 pb-2 lg:py-2 lg:px-3 text-center lg:text-left">
-                    {t(mod.titleKey)}
-                  </span>
-                </a>
-              ) : (
-                <Link
-                  key={mod.path}
-                  to={mod.path}
-                  className="group flex flex-col lg:flex-row items-center gap-2 shrink-0 lg:shrink-0 w-28 lg:w-full lg:rounded-xl lg:border lg:border-slate-700 lg:bg-slate-800/50 lg:overflow-hidden lg:mb-2 hover:border-primary/50 hover:shadow-lg transition-all duration-300"
-                  aria-label={t(mod.titleKey)}
-                >
-                  <div className="w-20 h-14 lg:w-full lg:aspect-[16/10] bg-slate-700 overflow-hidden rounded-lg lg:rounded-none">
-                    <img src={mod.image} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                  </div>
-                  <span className="text-xs lg:text-sm font-medium text-slate-300 group-hover:text-primary px-2 pb-2 lg:py-2 lg:px-3 text-center lg:text-left">
-                    {t(mod.titleKey)}
-                  </span>
-                </Link>
-              )
-            ))}
+    <Layout>
+      <div className="flex flex-col lg:flex-row min-h-0 flex-1">
+        {/* 왼쪽 사이드바 — 텍스트 메뉴 (다른 페이지와 동일 톤) */}
+        <aside className="shrink-0 border-b lg:border-b-0 lg:border-r border-slate-700/50 bg-slate-900/30 lg:w-48 lg:sticky lg:top-0 lg:self-start lg:max-h-screen lg:overflow-y-auto">
+          <nav className="p-4 lg:py-6 lg:px-4" aria-label={t("cartonDr.categoriesTitle")}>
+            <p className="text-slate-500 text-xs mb-4 hidden lg:block">
+              {t("cartonDr.partnerNotice")}{" "}
+              <Link to="/tienda" className="text-primary hover:underline">{t("cartonDr.partnerNoticeLink")}</Link>.
+            </p>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 lg:flex-col lg:gap-0">
+              {SIDEBAR_LINKS.map((item) => (
+                <li key={item.labelKey}>
+                  <Link
+                    to={item.to}
+                    className="text-slate-400 hover:text-white text-sm transition-colors block py-1.5 lg:py-2"
+                  >
+                    {t(item.labelKey)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </nav>
         </aside>
 
-        <main className="flex-1 min-w-0">
-        {/* Hero */}
-        <section className="relative bg-slate-800">
-          <div className="absolute inset-0 overflow-hidden">
-            <img
-              src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&h=600&fit=crop"
-              alt=""
-              className="w-full h-full object-cover opacity-40"
-            />
-          </div>
-          <div className="relative max-w-6xl mx-auto px-4 py-20 md:py-28 text-center">
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4">
-              {t("cartonDr.heroTitle")}
-            </h1>
-            <p className="text-slate-300 text-lg md:text-xl max-w-2xl mx-auto mb-8">
-              {t("cartonDr.heroSubtitle")}
-            </p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-8 py-3.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
-              >
-                {t("cartonDr.ctaContact")}
-              </a>
-              <a href="#categorias" className="inline-flex items-center justify-center rounded-xl border border-slate-500 px-8 py-3.5 text-sm font-medium text-slate-300 hover:bg-slate-700 transition-colors">
-                {t("cartonDr.ctaCategories")}
+        <main className="flex-1 min-w-0 bg-slate-900">
+          {/* Hero */}
+          <section className="relative bg-slate-800">
+            <div className="absolute inset-0 overflow-hidden">
+              <img
+                src={HERO_IMG}
+                alt="Carton DR empaque y cartón industrial"
+                className="w-full h-full object-cover opacity-40"
+                onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_IMG; }}
+              />
+            </div>
+            <div className="relative max-w-4xl mx-auto px-4 py-16 md:py-24 text-center">
+              <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">
+                {t("cartonDr.heroTitle")}
+              </h1>
+              <p className="text-slate-300 text-base md:text-lg max-w-2xl mx-auto mb-6">
+                {t("cartonDr.heroSubtitle")}
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors">
+                  {t("cartonDr.ctaContact")}
+                </a>
+                <a href="#categorias" className="inline-flex items-center justify-center rounded-lg border border-slate-500 px-6 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-700/80 transition-colors">
+                  {t("cartonDr.ctaCategories")}
+                </a>
+              </div>
+            </div>
+          </section>
+
+          {/* Categorías */}
+          <section id="categorias" className="max-w-6xl mx-auto px-4 py-12 md:py-16 scroll-mt-6">
+            <h2 className="text-xl font-bold text-white mb-6 text-center">{t("cartonDr.categoriesTitle")}</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {CATEGORIES.map((cat) => (
+                <div key={cat.id} id={cat.id} className="scroll-mt-6 rounded-xl border border-slate-700 bg-slate-800/50 overflow-hidden hover:border-slate-600 transition-colors">
+                  <div className="aspect-[4/3] bg-slate-700 overflow-hidden">
+                    <img src={cat.image} className="w-full h-full object-cover hover:scale-[1.02] transition-transform duration-300" {...imgProps(t(cat.titleKey))} />
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-semibold text-white">{t(cat.titleKey)}</h3>
+                    <p className="text-slate-400 text-sm mt-0.5">{t(cat.descKey)}</p>
+                    <Link to="/tienda?filter=carton-dr" className="inline-block mt-2 text-primary text-sm font-medium hover:underline">
+                      {t("cartonDr.viewInTienda")} →
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Sobre nosotros */}
+          <section id="about" className="border-t border-slate-700/50 bg-slate-800/30 py-12 md:py-16 scroll-mt-6">
+            <div className="max-w-3xl mx-auto px-4 text-center">
+              <h2 className="text-xl font-bold text-white mb-3">{t("cartonDr.aboutTitle")}</h2>
+              <p className="text-slate-400 text-sm md:text-base leading-relaxed">{t("cartonDr.aboutDesc")}</p>
+            </div>
+          </section>
+
+          {/* CTA Cotización */}
+          <section className="max-w-6xl mx-auto px-4 py-12 md:py-16">
+            <div className="rounded-xl bg-slate-800 border border-slate-700 p-6 md:p-8 text-center max-w-2xl mx-auto">
+              <h3 className="text-lg font-semibold text-white mb-1">{t("cartonDr.ctaQuoteTitle")}</h3>
+              <p className="text-slate-400 text-sm mb-4">{t("cartonDr.ctaQuoteDesc")}</p>
+              <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors">
+                {t("cartonDr.whatsapp")}
               </a>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Categorías */}
-        <section id="categorias" className="max-w-6xl mx-auto px-4 py-16 scroll-mt-4">
-          <h2 className="text-2xl font-bold text-white mb-8 text-center">{t("cartonDr.categoriesTitle")}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {CATEGORIES.map((cat) => (
-              <div key={cat.id} id={cat.id} className="scroll-mt-4">
-              <a
-                href={`#${cat.id}`}
-                className="group block rounded-2xl border border-slate-700 bg-slate-800/50 overflow-hidden hover:border-primary/50 hover:shadow-xl transition-all duration-300"
-              >
-                <div className="aspect-[4/3] bg-slate-700 overflow-hidden">
-                  <img
-                    src={cat.image}
-                    alt=""
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
+          {/* FAQ */}
+          <section id="faq" className="border-t border-slate-700/50 bg-slate-800/20 py-12 md:py-16 scroll-mt-6">
+            <div className="max-w-2xl mx-auto px-4">
+              <h2 className="text-xl font-bold text-white mb-6 text-center">{t("cartonDr.faqTitle")}</h2>
+              <dl className="space-y-5">
+                <div>
+                  <dt className="font-semibold text-white text-sm mb-0.5">{t("cartonDr.faqQ1")}</dt>
+                  <dd className="text-slate-400 text-sm leading-relaxed">{t("cartonDr.faqA1")}</dd>
                 </div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-white group-hover:text-primary transition-colors">
-                    {t(cat.titleKey)}
-                  </h3>
-                  <p className="text-slate-400 text-sm mt-1">{t(cat.descKey)}</p>
-                  <span className="inline-block mt-2 text-primary text-sm font-medium">
-                    {t("cartonDr.verMas")} →
-                  </span>
+                <div>
+                  <dt className="font-semibold text-white text-sm mb-0.5">{t("cartonDr.faqQ2")}</dt>
+                  <dd className="text-slate-400 text-sm leading-relaxed">{t("cartonDr.faqA2")}</dd>
                 </div>
-              </a>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Sobre nosotros — 간단 소개 */}
-        <section id="about" className="bg-slate-800/50 border-y border-slate-700/50 py-16 scroll-mt-4">
-          <div className="max-w-6xl mx-auto px-4 text-center">
-            <h2 className="text-2xl font-bold text-white mb-4">{t("cartonDr.aboutTitle")}</h2>
-            <p className="text-slate-400 max-w-2xl mx-auto leading-relaxed">
-              {t("cartonDr.aboutDesc")}
-            </p>
-          </div>
-        </section>
-
-        {/* CTA — Cotización */}
-        <section className="max-w-6xl mx-auto px-4 py-16">
-          <div className="rounded-2xl bg-slate-800 border border-slate-700 p-8 md:p-10 text-center">
-            <h3 className="text-xl font-semibold text-white mb-2">{t("cartonDr.ctaQuoteTitle")}</h3>
-            <p className="text-slate-400 mb-6">{t("cartonDr.ctaQuoteDesc")}</p>
-            <a
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-8 py-3.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
-            >
-              {t("cartonDr.whatsapp")}
-            </a>
-          </div>
-        </section>
-
-        {/* FAQ placeholder */}
-        <section id="faq" className="bg-slate-800/30 py-16 scroll-mt-4">
-          <div className="max-w-6xl mx-auto px-4 text-center">
-            <h2 className="text-2xl font-bold text-white mb-4">{t("cartonDr.faqTitle")}</h2>
-            <p className="text-slate-400 max-w-xl mx-auto">
-              {t("cartonDr.faqDesc")}
-            </p>
-            <Link to="/contact" className="inline-block mt-4 text-primary hover:underline">
-              {t("cartonDr.contact")}
-            </Link>
-          </div>
-        </section>
+                <div>
+                  <dt className="font-semibold text-white text-sm mb-0.5">{t("cartonDr.faqQ3")}</dt>
+                  <dd className="text-slate-400 text-sm leading-relaxed">{t("cartonDr.faqA3")}</dd>
+                </div>
+              </dl>
+              <p className="text-slate-500 text-xs mt-6 text-center">
+                {t("cartonDr.faqDesc")}{" "}
+                <Link to="/contact" className="text-primary hover:underline">{t("cartonDr.contact")}</Link>
+              </p>
+            </div>
+          </section>
         </main>
       </div>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-700/50 py-8 px-4 bg-slate-900">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-slate-400 mb-4">
-            <Link to="/carton-dr#about" className="hover:text-white transition-colors">
-              {t("cartonDr.about")}
-            </Link>
-            <Link to="/blog" className="hover:text-white transition-colors">
-              {t("cartonDr.blog")}
-            </Link>
-            <Link to="/blog" className="hover:text-white transition-colors">
-              {t("cartonDr.casosExito")}
-            </Link>
-            <Link to="/carton-dr#faq" className="hover:text-white transition-colors">
-              {t("cartonDr.faq")}
-            </Link>
-            <Link to="/contact" className="hover:text-white transition-colors">
-              {t("cartonDr.contact")}
-            </Link>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-slate-500">
-            <a href={`mailto:${CARTON_DR_EMAIL}`} className="hover:text-primary transition-colors">
-              {CARTON_DR_EMAIL}
-            </a>
-            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">
-              {CARTON_DR_PHONE_1}
-            </a>
-            <a href={`tel:${CARTON_DR_PHONE_2.replace(/\s/g, "")}`} className="hover:text-primary transition-colors">
-              {CARTON_DR_PHONE_2}
-            </a>
-          </div>
-          <p className="text-center text-slate-500 text-sm mt-6">
-            © {new Date().getFullYear()} {CARTON_DR_NAME} · {SITE_NAME}
-          </p>
-        </div>
-      </footer>
-    </div>
+    </Layout>
   );
 }

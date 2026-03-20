@@ -1,9 +1,11 @@
 /**
  * B2B 리드 관리: 생성·조회·이전, Hot Lead 생성 (trade-market-score + match-buyers 기반).
+ * 인메모리 + Supabase(b2b_leads) 지원.
  */
 
 import { matchBuyers, type MatchedBuyer } from "./buyerMatchingService.js";
 import { tradeMarketScore, type TradeMarketScoreResult } from "./tradeMarketScoreService.js";
+import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 
 export type LeadStatus = "new" | "contacted" | "qualified" | "transferred" | "closed";
 
@@ -54,7 +56,7 @@ function nextId(): string {
   return `lead_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function createLead(input: CreateLeadInput): Lead {
+export async function createLead(input: CreateLeadInput): Promise<Lead> {
   const now = new Date().toISOString();
   const lead: Lead = {
     id: nextId(),
@@ -70,15 +72,48 @@ export function createLead(input: CreateLeadInput): Lead {
     updated_at: now,
     metadata: input.metadata,
   };
+
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { error } = await supabase.from("b2b_leads").insert(lead);
+    if (!error) return lead;
+  }
+
   store.set(lead.id, lead);
   return lead;
 }
 
-export function getLead(id: string): Lead | undefined {
+export async function getLead(id: string): Promise<Lead | undefined> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("b2b_leads")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (!error && data) return data as Lead;
+  }
   return store.get(id);
 }
 
-export function getLeads(filter: LeadFilter = {}, limit = 50, offset = 0): { leads: Lead[]; total: number } {
+export async function getLeads(filter: LeadFilter = {}, limit = 50, offset = 0): Promise<{ leads: Lead[]; total: number }> {
+  const supabase = getSupabaseAdmin();
+  if (supabase) {
+    let q = supabase.from("b2b_leads").select("*", { count: "exact" });
+    if (filter.country) q = q.eq("country", filter.country);
+    if (filter.status) q = q.eq("status", filter.status);
+    if (filter.source) q = q.eq("source", filter.source);
+    if (typeof filter.min_score === "number") q = q.gte("score", filter.min_score);
+
+    const { data, count, error } = await q
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (!error && data) {
+      return { leads: data as Lead[], total: count || data.length };
+    }
+  }
+
   let list = Array.from(store.values());
   if (filter.country) list = list.filter((l) => l.country === filter.country);
   if (filter.status) list = list.filter((l) => l.status === filter.status);
@@ -90,13 +125,40 @@ export function getLeads(filter: LeadFilter = {}, limit = 50, offset = 0): { lea
   return { leads: list, total };
 }
 
-export function transferLead(
+export async function transferLead(
   id: string,
   supplier_id?: string,
   fee?: number
-): LeadTransferResult {
-  const lead = store.get(id);
+): Promise<LeadTransferResult> {
   const transferred_at = new Date().toISOString();
+  const supabase = getSupabaseAdmin();
+
+  if (supabase) {
+    // metadata는 jsonb 타입이라고 가정하고 업데이트
+    // metadata 필드가 아예 없을 수 있으므로 가져와서 병합하거나 upsert
+    const { data: lead } = await supabase.from("b2b_leads").select("metadata").eq("id", id).maybeSingle();
+    if (lead) {
+      const nextMeta = { 
+        ...(lead.metadata as Record<string, unknown> || {}),
+        transfer_supplier_id: supplier_id,
+        transfer_fee: fee 
+      };
+      const { error } = await supabase
+        .from("b2b_leads")
+        .update({ 
+          status: "transferred", 
+          updated_at: transferred_at,
+          metadata: nextMeta
+        })
+        .eq("id", id);
+      
+      if (!error) {
+        return { lead_id: id, supplier_id, fee, transferred_at, success: true };
+      }
+    }
+  }
+
+  const lead = store.get(id);
   if (!lead) {
     return { lead_id: id, supplier_id, fee, transferred_at, success: false };
   }
@@ -140,17 +202,17 @@ export function generateHotLeadCandidates(
     .slice(0, limit);
 }
 
-export function createHotLeads(
+export async function createHotLeads(
   origin: string,
   destination: string,
   productOrHs: string,
   count = 5
-): Lead[] {
+): Promise<Lead[]> {
   const candidates = generateHotLeadCandidates(origin, destination, productOrHs, count);
   const tradeResult = candidates[0]?.trade_score_result;
   const created: Lead[] = [];
   for (const c of candidates) {
-    const lead = createLead({
+    const lead = await createLead({
       product_or_hs: productOrHs,
       country: destination,
       source: "hot_lead",

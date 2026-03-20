@@ -9,12 +9,14 @@ import {
   getGranularAnalysisRequest,
   getSegmentedAnalysisResultAsync,
   getMarketNewsSummaryAsync,
-  type ReportLanguage,
-  type GranularAnalysisRequest,
-  type SegmentedAnalysisResult,
-  type NewsSummaryItem,
-  type MarketReportOutputOptions,
 } from "../marketIntelService.js";
+import type {
+  ReportLanguage,
+  GranularAnalysisRequest,
+  SegmentedAnalysisResult,
+  NewsSummaryItem,
+  MarketReportOutputOptions,
+} from "../marketIntel/types.js";
 
 export interface SupervisorResult {
   request: GranularAnalysisRequest;

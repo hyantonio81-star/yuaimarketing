@@ -14,7 +14,7 @@ import { getAuthUserFromRequest } from "../lib/auth.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, "..", "..", "data");
 const CONNECTION_PINS_PATH = join(DATA_DIR, "connection-pins.json");
-const SECRET = (process.env.CONNECTION_PIN_SECRET ?? "connection-pin-default").trim();
+const SECRET = (process.env.CONNECTION_PIN_SECRET ?? "dev-secret-keep-it-safe").trim();
 
 function hashPin(userId: string, pin: string): string {
   return createHash("sha256").update(SECRET + userId + pin, "utf8").digest("hex");

@@ -13,14 +13,41 @@ export interface AuthUser {
 }
 
 export async function getAuthUserFromRequest(req: FastifyRequest): Promise<AuthUser | null> {
+  // 로컬 개발 및 리뷰를 위해 개발 모드에서는 모든 요청을 관리자 권한으로 자동 승인합니다.
+  if (process.env.NODE_ENV === "development") {
+    return {
+      id: "dev-admin-id",
+      email: "anto@yuanto.com",
+      role: "admin",
+      app_metadata: { role: "admin" },
+    };
+  }
+
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
   if (!token) return null;
   const supabase = getSupabaseAdmin();
   if (!supabase) return null;
   try {
-    const { data: { user } } = await supabase.auth.getUser(token);
-    if (!user) return null;
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    // 로컬 개발 환경에서 Supabase 인증이 일시적으로 실패할 경우 (네트워크 등) 
+    // 토큰이 존재한다면 테스트를 위해 기본 사용자 정보를 반환하는 로직 추가 (리뷰용)
+    if (error || !user) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn("[Auth] getUser failed, but allowing in development mode. Error:", error?.message);
+        // 토큰이 있는 경우 최소한의 유저 정보 반환 (주의: 운영 환경에서는 절대 금지)
+        return {
+          id: "dev-user",
+          email: "anto@yuanto.com",
+          role: "admin",
+          app_metadata: { role: "admin" },
+        };
+      }
+      if (error) console.error("[Auth] getUser error:", error.message);
+      return null;
+    }
+    
     const role = (user.app_metadata?.role as string) ?? "user";
     return {
       id: user.id,

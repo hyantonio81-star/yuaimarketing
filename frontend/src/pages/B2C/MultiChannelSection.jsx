@@ -3,8 +3,8 @@ import SectionCard from "../../components/SectionCard";
 import { useLanguage } from "../../context/LanguageContext.jsx";
 
 const OWN_CHANNELS = ["Shopify", "WooCommerce", "Custom Website"];
-const MARKETPLACE_KR = ["쿠팡 (Coupang)", "네이버 스마트스토어", "11번가", "지마켓, 옥션"];
-const MARKETPLACE_GLOBAL = ["Amazon (US, JP, EU)", "eBay", "Walmart Marketplace", "Rakuten (일본)", "Lazada (동남아)"];
+const MARKETPLACE_KR = ["Coupang", "Naver SmartStore", "11st", "Gmarket/Auction"];
+const MARKETPLACE_GLOBAL = ["Amazon (US, JP, EU)", "eBay", "Walmart Marketplace", "Rakuten (JP)", "Lazada (SEA)"];
 const SOCIAL_COMMERCE = ["Facebook/Instagram Shop", "TikTok Shop", "Pinterest Shopping", "YouTube Shopping"];
 
 const GROUP_BUYING_KEYS = [

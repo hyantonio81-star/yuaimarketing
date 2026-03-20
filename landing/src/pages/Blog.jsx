@@ -2,9 +2,18 @@ import { Link } from "react-router-dom";
 import Layout from "../components/Layout";
 import { useLanguage } from "../context/LanguageContext";
 import { BLOG_POSTS } from "../lib/constants";
+import { useSeoMeta } from "../lib/seo";
+
+const DEFAULT_IMG = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&h=320&fit=crop";
 
 export default function Blog() {
   const { t } = useLanguage();
+
+  useSeoMeta({
+    title: t("blog.title"),
+    description: t("blog.subtitle"),
+    path: "/blog",
+  });
 
   return (
     <Layout>
@@ -24,9 +33,10 @@ export default function Blog() {
                 <div className="aspect-[6/3] sm:aspect-[2/1] overflow-hidden bg-slate-700">
                   <img
                     src={post.image}
-                    alt=""
+                    alt={t(post.titleKey)}
                     className="w-full h-full object-cover"
                     loading="lazy"
+                    onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_IMG; }}
                   />
                 </div>
                 <div className="p-5">

@@ -3,9 +3,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
 
 # 저장소 루트 = nexus-ai (yuaimarketing)
 defaults:
@@ -31,5 +31,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Build (backend + frontend, Vercel과 동일)
+      - name: Test (backend)
+        run: npm run test
+
+      - name: Security audit (high)
+        run: npm audit --audit-level=high
+
+      - name: Build (backend + frontend + landing)
         run: npm run build
