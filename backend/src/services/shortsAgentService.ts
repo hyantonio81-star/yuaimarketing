@@ -22,6 +22,7 @@ import { generateSceneAudios } from "./shorts/shortsVoiceAgent.js";
 import { selectBgm } from "./shorts/shortsBgmAgent.js";
 import { assembleVideo as editAssembleVideo } from "./shorts/shortsEditAgent.js";
 import { deployToYouTube, deployToPlatforms, type DeployPlatform } from "./shorts/shortsDeployAgent.js";
+import { updateVideoStats } from "./shorts/shortsStatsService.js";
 import { loadJobsFromFile, saveJobsToFile } from "./shortsJobStore.js";
 import {
   copyVideoToStorage,
@@ -378,7 +379,23 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
     );
     const deployedUrls: Record<string, string> = {};
     for (const [platform, r] of Object.entries(results ?? {})) {
-      if (r?.url) deployedUrls[platform] = r.url;
+      if (r?.url) {
+        deployedUrls[platform] = r.url;
+        // [Stats 피드백] 초기 성과 데이터 생성
+        try {
+          await updateVideoStats({
+            jobId,
+            platform,
+            externalId: r.url.split("/").pop() || jobId, // URL에서 ID 추출 시도
+            views: 0,
+            likes: 0,
+            comments: 0,
+            updatedAt: new Date().toISOString()
+          });
+        } catch {
+          // ignore
+        }
+      }
     }
     job.deployedUrls = Object.keys(deployedUrls).length ? deployedUrls : undefined;
     job.videoUrl = job.deployedUrls?.youtube ?? Object.values(deployedUrls)[0];

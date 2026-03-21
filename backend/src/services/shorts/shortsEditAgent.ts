@@ -170,28 +170,41 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
       // 더 세련된 스타일: 하단 바 + 텍스트 + CTA
       const barHeight = 120;
       const barY = 1920 - 350;
-      const overlayFilter = `drawbox=y=${barY}:h=${barHeight}:color=black@0.6:t=fill:enable='between(t,${displayTimingSeconds},${durationSeconds})',` +
+      
+      // 1. 바와 텍스트 오버레이
+      let overlayFilter = `drawbox=y=${barY}:h=${barHeight}:color=black@0.6:t=fill:enable='between(t,${displayTimingSeconds},${durationSeconds})',` +
                            `drawtext=text='${name.replace(/'/g, "\\'")}':fontcolor=yellow:fontsize=48:x=(w-text_w)/2:y=${barY + 20}:enable='between(t,${displayTimingSeconds},${durationSeconds})',` +
                            `drawtext=text='CHECK LINK IN BIO':fontcolor=white:fontsize=32:x=(w-text_w)/2:y=${barY + 75}:enable='between(t,${displayTimingSeconds},${durationSeconds})'`;
       
+      // 2. QR 코드 추가 (선택 사항 - 모바일 구매 전환용)
+      const qrPath = join(workDir, "affiliate_qr.png");
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(script.affiliateItem.linkUrl)}`;
       try {
+        await downloadImage(qrUrl, qrPath);
+        // QR 코드를 우측 하단에 오버레이
+        overlayFilter += `,overlay=x=W-250:y=H-650:enable='between(t,${displayTimingSeconds},${durationSeconds})'`;
+        
+        await execAsync(
+          `ffmpeg -y -i "${videoOnlyPath}" -i "${qrPath}" -filter_complex "[0]${overlayFilter}[out]" -map "[out]" -map 0:a? -c:v libx264 -c:a copy "${overlayPath}"`,
+          { timeout: 60000 }
+        );
+      } catch (qrErr) {
+        console.warn("[QR Overlay Error] Skipping QR code:", qrErr);
         await execAsync(
           `ffmpeg -y -i "${videoOnlyPath}" -vf "${overlayFilter}" -c:v libx264 -c:a copy "${overlayPath}"`,
           { timeout: 60000 }
         );
-        videoFinalPath = overlayPath;
-      } catch (e) {
-        console.warn("[Affiliate Overlay Error] Falling back to plain video:", e);
       }
+      videoFinalPath = overlayPath;
     }
 
     if (finalAudioPath) {
       await execAsync(
-        `ffmpeg -y -i "${videoFinalPath}" -i "${finalAudioPath}" -c:v libx264 -c:a aac -shortest "${videoPath}"`,
+        `ffmpeg -y -i "${videoFinalPath}" -i "${finalAudioPath}" -vf "fade=t=in:st=0:d=1,fade=t=out:st=${durationSeconds - 1}:d=1" -c:v libx264 -c:a aac -shortest "${videoPath}"`,
         { timeout: 60000 }
       );
     } else {
-      await execAsync(`ffmpeg -y -i "${videoFinalPath}" -c:v libx264 -c:a aac "${videoPath}"`, { timeout: 30000 });
+      await execAsync(`ffmpeg -y -i "${videoFinalPath}" -vf "fade=t=in:st=0:d=1,fade=t=out:st=${durationSeconds - 1}:d=1" -c:v libx264 -c:a aac "${videoPath}"`, { timeout: 30000 });
     }
 
     const thumbnailPath = join(workDir, "thumb.jpg");
