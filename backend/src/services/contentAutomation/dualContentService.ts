@@ -4,6 +4,7 @@
  */
 
 import type { CommerceProduct } from "../threadsCommerce/types.js";
+import type { TrendTopic, ShortsScript } from "../shorts/shortsTypes.js";
 import type { DualContentResult, DualContentOptions, ContentLanguageCode, TargetCountryCode } from "./types.js";
 import { META_COMPLIANCE_SHORT } from "../../lib/metaContentPolicy.js";
 
@@ -99,4 +100,57 @@ function fallbackSns(product: { title: string; category: string }, _lang: string
 
 function fallbackBlog(product: { title: string; category: string }, _lang: string): string {
   return `<h1>${product.title}</h1><p>Reseña útil para República Dominicana: ${product.category}. Incluye datos locales de envío y consejos.</p><h2>Especificaciones</h2><p>Revisa el enlace del producto para detalles actualizados.</p>`;
+}
+
+/**
+ * [OSMU] Shorts 영상 스크립트 기반 블로그 포스팅 생성.
+ * 뉴스 주제와 스크립트 내용을 바탕으로 상세한 블로그 리뷰(AdSense 최적화)를 작성합니다.
+ */
+export async function generateNewsBlogContent(
+  topic: TrendTopic,
+  script: ShortsScript,
+  options: DualContentOptions = {}
+): Promise<DualContentResult> {
+  const lang = options.contentLanguage ?? "es-DO";
+  const country = options.targetCountry ?? "DO";
+  const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+
+  const blogPromise = (async (): Promise<{ body: string; title?: string }> => {
+    if (!geminiKey) return { body: `<h1>${topic.title}</h1><p>${topic.summary}</p>`, title: topic.title };
+    try {
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      const genAI = new GoogleGenerativeAI(geminiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const system = getBlogSystem(lang, country);
+      
+      const prompt = `${system}
+
+아래 뉴스 주제와 영상 스크립트 내용을 바탕으로, 구글 애드센스 승인이 가능한 고품질의 블로그 포스팅을 작성하세요.
+단순 요약이 아니라, 배경 지식과 독창적인 분석, 그리고 현지(도미니카/멕시코 등) 독자에게 주는 시사점을 포함해야 합니다.
+
+뉴스 주제: ${topic.title}
+뉴스 요약: ${topic.summary}
+영상 후크: ${script.hook}
+스크립트 요약: ${script.scenes.map(s => s.text).join(" ")}
+${script.affiliateItem ? `추천 상품: ${script.affiliateItem.name} (${script.affiliateItem.linkUrl})` : ""}
+
+HTML 형식을 사용하세요 (h1, h2, p, ul, table 등).`;
+
+      const result = await model.generateContent(prompt);
+      const text = result.response.text?.()?.trim() ?? topic.summary;
+      const titleMatch = text.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+      return { body: text.slice(0, 15000), title: titleMatch ? titleMatch[1].trim() : topic.title };
+    } catch {
+      return { body: `<h1>${topic.title}</h1><p>${topic.summary}</p>`, title: topic.title };
+    }
+  })();
+
+  const blog = await blogPromise;
+  
+  return {
+    snsCopy: "", // 뉴스 블로그 생성 시 SNS 카피는 별도 처리 가능하므로 일단 비움
+    blogReview: blog.body,
+    blogTitle: blog.title,
+    model: geminiKey ? "gemini" : undefined,
+  };
 }

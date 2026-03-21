@@ -165,15 +165,23 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
     if (script.affiliateItem) {
       const { name, displayTimingSeconds } = script.affiliateItem;
       const overlayPath = join(workDir, "video_with_aff.mp4");
-      const drawtext = `drawtext=text='${name}':fontcolor=yellow:fontsize=54:box=1:boxcolor=black@0.7:boxborderw=15:x=(w-text_w)/2:y=h-250:enable='between(t,${displayTimingSeconds},${durationSeconds})'`;
+      const durationSeconds = script.totalDurationSeconds;
+      
+      // 더 세련된 스타일: 하단 바 + 텍스트 + CTA
+      const barHeight = 120;
+      const barY = 1920 - 350;
+      const overlayFilter = `drawbox=y=${barY}:h=${barHeight}:color=black@0.6:t=fill:enable='between(t,${displayTimingSeconds},${durationSeconds})',` +
+                           `drawtext=text='${name.replace(/'/g, "\\'")}':fontcolor=yellow:fontsize=48:x=(w-text_w)/2:y=${barY + 20}:enable='between(t,${displayTimingSeconds},${durationSeconds})',` +
+                           `drawtext=text='CHECK LINK IN BIO':fontcolor=white:fontsize=32:x=(w-text_w)/2:y=${barY + 75}:enable='between(t,${displayTimingSeconds},${durationSeconds})'`;
+      
       try {
         await execAsync(
-          `ffmpeg -y -i "${videoOnlyPath}" -vf "${drawtext}" -codec:a copy "${overlayPath}"`,
+          `ffmpeg -y -i "${videoOnlyPath}" -vf "${overlayFilter}" -c:v libx264 -c:a copy "${overlayPath}"`,
           { timeout: 60000 }
         );
         videoFinalPath = overlayPath;
-      } catch {
-        // ignore overlay failure
+      } catch (e) {
+        console.warn("[Affiliate Overlay Error] Falling back to plain video:", e);
       }
     }
 

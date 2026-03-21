@@ -33,6 +33,8 @@ import {
 } from "./shortsStorage.js";
 import { getChannelDefaults } from "./shortsChannelDefaults.js";
 import type { ShortsPipelineJob, ShortsScript } from "./shorts/shortsTypes.js";
+import { generateNewsBlogContent } from "./contentAutomation/dualContentService.js";
+import { publishToBlogger } from "./contentAutomation/bloggerService.js";
 
 const JOBS = new Map<string, ShortsPipelineJob>();
 let jobsLoaded = false;
@@ -177,6 +179,8 @@ export interface RunPipelineOptions {
   bgmMood?: string;
   bgmVolume?: number;
   platforms?: DeployPlatform[];
+  /** OSMU 활성화: 영상 생성 시 블로그 포스트 자동 동 동시 생성 */
+  enableOsmu?: boolean;
 }
 
 /**
@@ -204,6 +208,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     bgmMood,
     bgmVolume = defaults?.bgmVolume ?? 0.15,
     platforms = ["youtube"],
+    enableOsmu = true, // 기본값 true로 설정하여 OSMU 시너지 극대화
   } = options ?? {};
 
   const uploadMode = uploadModeOpt ?? (defaults?.autoUpload === false ? "review_first" : "immediate");
@@ -226,6 +231,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     bgmMood: bgmMood ?? defaults?.bgmMood,
     bgmVolume: bgmVolume ?? defaults?.bgmVolume ?? 0.15,
     platforms: platforms?.length ? platforms : ["youtube"],
+    enableOsmu,
   };
 
   const jobId = `job-${Date.now()}-${simpleHash(keywords.join(","))}`;
@@ -276,6 +282,29 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
       sourceLanguage: merged.sourceLanguage,
     });
     job.script = script;
+
+    // [OSMU] 블로그 포스팅 자동 생성 (선택 사항)
+    if (merged.enableOsmu) {
+      try {
+        const blogContent = await generateNewsBlogContent(topic, script, {
+          contentLanguage: merged.languageOverride ?? "es-DO",
+        });
+        const blogId = (process.env.BLOGGER_BLOG_ID ?? "").trim();
+        if (blogId && blogContent.blogReview) {
+          const blogResult = await publishToBlogger(
+            blogId,
+            blogContent.blogTitle ?? script.topicTitle,
+            blogContent.blogReview
+          );
+          if (blogResult.ok && blogResult.postUrl) {
+            console.log(`[OSMU] Blog post created: ${blogResult.postUrl}`);
+            // 필요 시 job.deployedUrls 등에 블로그 링크 추가 가능
+          }
+        }
+      } catch (blogErr) {
+        console.error(`[OSMU Error] Failed to generate blog:`, blogErr);
+      }
+    }
 
     job.status = "images";
     job.updatedAt = new Date().toISOString();

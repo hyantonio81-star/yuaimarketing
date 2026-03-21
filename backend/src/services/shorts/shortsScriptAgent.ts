@@ -21,14 +21,29 @@ export interface ScriptOptions {
 }
 
 /** 
- * 시맨틱 제휴 상품 매칭: 뉴스 키워드와 상품 키워드 대조 (단순 구현)
+ * 시맨틱 제휴 상품 매칭: 뉴스 키워드와 상품 키워드 대조 (AI 추출 키워드 지원)
  */
-async function matchAffiliateItem(topic: TrendTopic, category: string): Promise<ShortsScript["affiliateItem"] | undefined> {
+async function matchAffiliateItem(topic: TrendTopic, category: string, aiKeywords?: string[]): Promise<ShortsScript["affiliateItem"] | undefined> {
   try {
     const marketplace = "amazon"; // 기본값
-    const { shortlist } = await getPromoShortlist(marketplace, { limit: 10, min_score: 50 });
+    const { shortlist } = await getPromoShortlist(marketplace, { limit: 20, min_score: 40 });
     
-    // 1. 키워드 매칭 (제목이나 요약에 상품 키워드 포함 여부)
+    // 1. AI 추출 키워드 기반 매칭 (우선순위 높음)
+    if (aiKeywords && aiKeywords.length > 0) {
+      for (const kw of aiKeywords) {
+        const matched = shortlist.find(p => p.title.toLowerCase().includes(kw.toLowerCase()));
+        if (matched) {
+          return {
+            id: matched.id,
+            name: matched.title.slice(0, 20),
+            linkUrl: (matched as any).url || "https://yuanto.com/shop",
+            displayTimingSeconds: 7, 
+          };
+        }
+      }
+    }
+
+    // 2. 뉴스 제목/요약 텍스트 매칭
     const topicText = (topic.title + " " + topic.summary).toLowerCase();
     const matched = shortlist.find(p => {
       const pTitle = p.title.toLowerCase();
@@ -88,23 +103,24 @@ export async function generateScriptForTopic(topic: TrendTopic, avatarPresetId?:
   const format = opts.format ?? "shorts";
   const targetSec = opts.targetDurationSeconds ?? (format === "long" ? 90 : 9);
 
-  // 캐릭터 설정
+  // 캐릭터 설정 (다국어 브랜딩 강화)
   let tone = "친근한 반말";
   let characterName = "쇼츠봇";
+  let description = `${category} 분야 전문 AI 큐레이터`;
+  
   if (targetLang === "es") {
-    tone = "Informal y amable";
-    characterName = "ShortsBot";
+    tone = "Informal y amable, como una influencer dominicana";
+    characterName = "Lumi (AI)";
+    description = `Curadora experta en ${category}`;
   } else if (targetLang === "en") {
-    tone = "Friendly and casual";
-    characterName = "ShortsBot";
+    tone = "Friendly and casual, expert curator style";
+    characterName = "Nexus AI";
+    description = `Expert curator in ${category}`;
+  } else if (targetLang === "ko" && category === "silver") {
+    tone = "차분하고 따뜻한 말투";
+    characterName = "실버 도우미";
+    description = "시니어 삶의 질을 높이는 정보 가이드";
   }
-
-  const character: ShortsCharacter = {
-    name: characterName,
-    description: `${category} 분야 전문 AI 큐레이터`,
-    tone,
-    imagePromptHint,
-  };
 
   // AI를 통한 스토리텔링 생성 시도
   const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
@@ -114,7 +130,12 @@ export async function generateScriptForTopic(topic: TrendTopic, avatarPresetId?:
 
   const systemPrompt = `You are a viral vertical video creator. Create a script based on the news topic.
 Format: JSON only.
-Structure: { "hook": "short catchy hook", "scenes": [{ "text": "spoken text", "visual": "visual description for image gen" }] }
+Structure: { 
+  "hook": "short catchy hook", 
+  "scenes": [{ "text": "spoken text", "visual": "visual description for image gen" }],
+  "keywords": ["3-5 keywords that represent the news or products that can solve problems in this news"],
+  "painPoint": "a short sentence about the problem/need discussed in the news"
+}
 Language: ${targetLang === "ko" ? "Korean" : targetLang === "es" ? "Spanish" : "English"}.
 Tone: ${tone}.
 Target Duration: ${targetSec} seconds.
@@ -149,8 +170,9 @@ Constraints: Max 3 scenes for shorts, 6 scenes for long. Each scene text should 
     }
   }
 
-  // 제휴 아이템 매칭
-  const affiliateItem = await matchAffiliateItem(topic, category);
+  // 제휴 아이템 매칭 (AI 추출 키워드 활용)
+  const aiKeywords = (aiScript as any)?.keywords || [];
+  const affiliateItem = await matchAffiliateItem(topic, category, aiKeywords);
 
   // AI 결과가 있으면 변환, 없으면 기존 슬라이싱 로직(fallback)
   if (aiScript && aiScript.scenes?.length > 0) {

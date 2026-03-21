@@ -28,6 +28,8 @@ export interface DualContentResult {
   blogReview: string;
   blogTitle?: string;
   model?: string;
+  /** Shorts 연동 시: 연계된 숏츠 jobId */
+  shortsJobId?: string;
 }
 
 export interface DualContentOptions {
