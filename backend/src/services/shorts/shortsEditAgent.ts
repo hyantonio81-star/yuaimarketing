@@ -86,18 +86,30 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
       };
     }
 
-    const scaleFilter = "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2";
+    // --- 영상 클립 생성 (Ken Burns 효과 + 동적 자막 포함) ---
     const clipPaths: string[] = [];
     for (let i = 0; i < sortedScenes.length; i++) {
-      const dur = sortedScenes[i].durationSeconds;
+      const scene = sortedScenes[i];
+      const dur = scene.durationSeconds;
       const clipPath = join(workDir, `clip_${i}.mp4`);
+      
+      // 1. Ken Burns 효과 (줌인)
+      const zoomFilter = `zoompan=z='min(zoom+0.0015,1.5)':d=${dur*30}:s=1080x1920:fps=30`;
+      
+      // 2. 동적 자막 (텍스트 하단 중앙)
+      const sanitizedText = scene.text.replace(/'/g, "\\'").replace(/:/g, "\\:");
+      const captionFilter = `drawtext=text='${sanitizedText}':fontcolor=white:fontsize=64:box=1:boxcolor=black@0.4:boxborderw=20:x=(w-text_w)/2:y=h-400`;
+      
+      const filterComplex = `${zoomFilter},${captionFilter}`;
+
       await execAsync(
-        `ffmpeg -y -loop 1 -i "${imagePaths[i]}" -t ${dur} -vf "${scaleFilter}" -r 30 -pix_fmt yuv420p "${clipPath}"`,
+        `ffmpeg -y -loop 1 -i "${imagePaths[i]}" -t ${dur} -vf "${filterComplex}" -r 30 -pix_fmt yuv420p -c:v libx264 "${clipPath}"`,
         { timeout: 60000 }
       );
       clipPaths.push(clipPath);
     }
 
+    // --- 클립 합치기 (xfade 전환 효과 시도 - 단순화를 위해 일단 concat) ---
     const listPath = join(workDir, "list.txt");
     const listContent = clipPaths.map((p) => `file '${p.replace(/\\/g, "/")}'`).join("\n");
     await writeFile(listPath, listContent);
@@ -108,6 +120,7 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
       { timeout: 60000 }
     );
 
+    // --- 오디오 처리 ---
     const audioPaths = sortedScenes
       .map((s) => sceneAudios.find((a) => a.sceneIndex === s.sceneIndex)?.audioPath)
       .filter((p): p is string => !!p);
@@ -147,12 +160,12 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
 
     const videoPath = join(workDir, "final.mp4");
     
-    // 제휴 아이템 오버레이 (텍스트/아이콘) - 2026-03-20 build re-trigger
+    // --- 제휴 아이템 오버레이 (텍스트/아이콘) ---
     let videoFinalPath = videoOnlyPath;
     if (script.affiliateItem) {
       const { name, displayTimingSeconds } = script.affiliateItem;
       const overlayPath = join(workDir, "video_with_aff.mp4");
-      const drawtext = `drawtext=text='${name}':fontcolor=white:fontsize=48:box=1:boxcolor=black@0.5:boxborderw=10:x=(w-text_w)/2:y=h-200:enable='between(t,${displayTimingSeconds},${durationSeconds})'`;
+      const drawtext = `drawtext=text='${name}':fontcolor=yellow:fontsize=54:box=1:boxcolor=black@0.7:boxborderw=15:x=(w-text_w)/2:y=h-250:enable='between(t,${displayTimingSeconds},${durationSeconds})'`;
       try {
         await execAsync(
           `ffmpeg -y -i "${videoOnlyPath}" -vf "${drawtext}" -codec:a copy "${overlayPath}"`,
@@ -185,7 +198,8 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
       durationSeconds,
       fromStub: false,
     };
-  } catch {
+  } catch (e) {
+    console.error("[Assemble Error]", e);
     return {
       videoPath: join(workDir, "stub.mp4"),
       thumbnailPath: join(workDir, "stub-thumb.jpg"),

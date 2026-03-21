@@ -265,7 +265,7 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
     job.updatedAt = new Date().toISOString();
     await persistJobs();
 
-    const script = generateScriptForTopic(topic, merged.avatarPresetId, {
+    const script = await generateScriptForTopic(topic, merged.avatarPresetId, {
       avatarPresetId: merged.avatarPresetId,
       format: merged.format,
       targetDurationSeconds: merged.targetDurationSeconds,

@@ -57,7 +57,7 @@ export interface DeployToPlatformsResult {
   errors: Partial<Record<DeployPlatform, string>>;
 }
 
-/** 선택한 플랫폼들에 순차 배포. YouTube는 youtubeKey 사용. */
+/** 선택한 플랫폼들에 순차 배포. YouTube는 youtubeKey 사용. SEO 최적화 포함. */
 export async function deployToPlatforms(
   videoPath: string,
   meta: DeployMeta,
@@ -66,17 +66,33 @@ export async function deployToPlatforms(
 ): Promise<DeployToPlatformsResult> {
   const results: Partial<Record<DeployPlatform, DeployResult>> = {};
   const errors: Partial<Record<DeployPlatform, string>> = {};
+  
+  // SEO 최적화: 제목 및 해시태그 보강
+  const optimizedTitle = meta.title.length > 60 ? meta.title.slice(0, 57) + "..." : meta.title;
+  const commonHashtags = "#AI #Shorts #Trending #Insight #YUAI";
+  const platformHashtags: Record<DeployPlatform, string> = {
+    youtube: "#Shorts #Trending",
+    tiktok: "#fyp #foryou #viral",
+    instagram: "#reels #trending #daily",
+    facebook: "#reels #video #viral"
+  };
+
   const unique = [...new Set(platforms)].filter((p) => DEPLOY_PLATFORMS.includes(p));
   for (const platform of unique) {
     try {
+      const platformMeta: DeployMeta = {
+        title: optimizedTitle,
+        description: `${meta.description}\n\n${commonHashtags} ${platformHashtags[platform]}`
+      };
+
       if (platform === "youtube") {
-        results.youtube = await deployToYouTube(videoPath, meta, youtubeKey);
+        results.youtube = await deployToYouTube(videoPath, platformMeta, youtubeKey);
       } else if (platform === "tiktok") {
-        results.tiktok = await deployToTikTok(videoPath, meta);
+        results.tiktok = await deployToTikTok(videoPath, platformMeta);
       } else if (platform === "instagram") {
-        results.instagram = await deployToInstagram(videoPath, meta);
+        results.instagram = await deployToInstagram(videoPath, platformMeta);
       } else if (platform === "facebook") {
-        results.facebook = await deployToFacebook(videoPath, meta);
+        results.facebook = await deployToFacebook(videoPath, platformMeta);
       }
     } catch (e) {
       errors[platform] = e instanceof Error ? e.message : String(e);
