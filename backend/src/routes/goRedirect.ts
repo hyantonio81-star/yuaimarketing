@@ -41,7 +41,7 @@ export async function goRedirectRoutes(app: FastifyInstance) {
     const url = redirectsMap[id] ?? process.env[`GO_${id.replace(/-/g, "_").toUpperCase()}`];
     if (!url || typeof url !== "string") return reply.code(404).send({ error: "Redirect not found" });
 
-    // 클릭 추적 (비동기, 리다이렉트 방해 금지)
+    // 클릭 추적 (비동기, 리다이렉트 방해 금지) - 2026-03-20 build re-trigger
     const supabase = getSupabaseAdmin();
     if (supabase) {
       supabase.from("link_clicks").insert({

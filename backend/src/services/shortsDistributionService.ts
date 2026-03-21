@@ -143,7 +143,7 @@ export async function processDistributionQueue(): Promise<void> {
         "default"
       );
 
-      // TS7053 에러 방지를 위해 any 캐스팅 후 인덱싱
+      // TS7053 에러 방지를 위해 any 캐스팅 후 인덱싱 - 2026-03-20 build re-trigger
       const result = (results as any)[item.platform];
       const platformError = (errors as any)[item.platform];
 
