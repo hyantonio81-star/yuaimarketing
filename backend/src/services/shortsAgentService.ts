@@ -271,6 +271,9 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
       targetDurationSeconds: merged.targetDurationSeconds,
       characterAge: merged.characterAge,
       characterGender: merged.characterGender,
+      languageOverride: merged.languageOverride,
+      category: merged.category,
+      sourceLanguage: merged.sourceLanguage,
     });
     job.script = script;
 

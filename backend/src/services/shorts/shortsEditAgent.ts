@@ -146,13 +146,31 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
     }
 
     const videoPath = join(workDir, "final.mp4");
+    
+    // 제휴 아이템 오버레이 (텍스트/아이콘) - 2026-03-20 build re-trigger
+    let videoFinalPath = videoOnlyPath;
+    if (script.affiliateItem) {
+      const { name, displayTimingSeconds } = script.affiliateItem;
+      const overlayPath = join(workDir, "video_with_aff.mp4");
+      const drawtext = `drawtext=text='${name}':fontcolor=white:fontsize=48:box=1:boxcolor=black@0.5:boxborderw=10:x=(w-text_w)/2:y=h-200:enable='between(t,${displayTimingSeconds},${durationSeconds})'`;
+      try {
+        await execAsync(
+          `ffmpeg -y -i "${videoOnlyPath}" -vf "${drawtext}" -codec:a copy "${overlayPath}"`,
+          { timeout: 60000 }
+        );
+        videoFinalPath = overlayPath;
+      } catch {
+        // ignore overlay failure
+      }
+    }
+
     if (finalAudioPath) {
       await execAsync(
-        `ffmpeg -y -i "${videoOnlyPath}" -i "${finalAudioPath}" -c:v copy -c:a aac -shortest "${videoPath}"`,
+        `ffmpeg -y -i "${videoFinalPath}" -i "${finalAudioPath}" -c:v libx264 -c:a aac -shortest "${videoPath}"`,
         { timeout: 60000 }
       );
     } else {
-      await execAsync(`ffmpeg -y -i "${videoOnlyPath}" -c copy "${videoPath}"`, { timeout: 30000 });
+      await execAsync(`ffmpeg -y -i "${videoFinalPath}" -c:v libx264 -c:a aac "${videoPath}"`, { timeout: 30000 });
     }
 
     const thumbnailPath = join(workDir, "thumb.jpg");

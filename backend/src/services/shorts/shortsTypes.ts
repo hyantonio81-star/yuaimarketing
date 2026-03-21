@@ -57,6 +57,14 @@ export interface ShortsScript {
   character: ShortsCharacter;
   scenes: ShortsScriptScene[];
   totalDurationSeconds: number;
+  /** 제휴/홍보 아이템 정보 (추후 확장용) */
+  affiliateItem?: {
+    id: string;
+    name: string;
+    iconUrl?: string;
+    linkUrl: string;
+    displayTimingSeconds: number;
+  };
 }
 
 export interface ShortsPipelineJob {

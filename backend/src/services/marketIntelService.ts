@@ -679,38 +679,46 @@ async function getLocalMarketNewsItems(countryCode: string): Promise<NewsSummary
 }
 
 /** 국가별 뉴스 수집. 로컬 시장(DGCP 등) + NewsData.io → Mediastack → RSS */
-async function getCountryNewsCached(countryCode: string): Promise<NewsSummaryItem[]> {
-  const key = (countryCode || "ALL").trim().toUpperCase();
+async function getCountryNewsCached(countryCode: string, categoryFilter?: string): Promise<NewsSummaryItem[]> {
+  const key = `${(countryCode || "ALL").trim().toUpperCase()}_${categoryFilter || "ALL"}`;
   const now = Date.now();
   const cached = countryNewsCache.get(key);
   if (cached && now - cached.time < RSS_CACHE_MS && cached.items.length > 0) return cached.items;
 
   let items: NewsSummaryItem[] = [];
   try {
-    const localItems = await getLocalMarketNewsItems(countryCode);
+    const localItems = categoryFilter ? [] : await getLocalMarketNewsItems(countryCode);
     const hasNewsData = (process.env.NEWSDATA_API_KEY ?? "").trim();
     const hasMediastack = (process.env.MEDIASTACK_ACCESS_KEY ?? "").trim();
-    if (hasNewsData && key !== "ALL") {
+    
+    // NewsData.io/Mediastack API는 카테고리 필터 미지원 시 전체 데이터에서 가져옴 (추후 확장 가능)
+    if (hasNewsData && countryCode !== "ALL" && !categoryFilter) {
       const { fetchNewsDataIo } = await import("./externalApis/newsDataIo.js");
       const raw = await fetchNewsDataIo(countryCode, { limit: 15 });
       items = raw.map((r) => ({ ...r, date: r.date || new Date().toISOString().slice(0, 10) }));
     }
-    if (items.length === 0 && hasMediastack && key !== "ALL") {
+    if (items.length === 0 && hasMediastack && countryCode !== "ALL" && !categoryFilter) {
       const { fetchMediastackNews } = await import("./externalApis/mediastack.js");
       const raw = await fetchMediastackNews(countryCode, { limit: 15 });
       items = raw.map((r) => ({ ...r, date: r.date || new Date().toISOString().slice(0, 10) }));
     }
+    
+    // 카테고리 필터가 있거나 API 결과가 없으면 RSS에서 가져옴
     if (items.length === 0) {
-      items = await getRssNewsCached();
+      const { fetchRssNewsItems } = await import("./externalApis/rssNews.js");
+      items = (await fetchRssNewsItems(10, categoryFilter)) as any;
     }
+    
     items = [...localItems, ...items];
   } catch {
-    const local = await getLocalMarketNewsItems(countryCode).catch(() => []);
-    const rss = await getRssNewsCached();
+    const { fetchRssNewsItems } = await import("./externalApis/rssNews.js");
+    const local = categoryFilter ? [] : await getLocalMarketNewsItems(countryCode).catch(() => []);
+    const rss = (await fetchRssNewsItems(10, categoryFilter)) as any;
     items = [...local, ...rss];
   }
+  
   countryNewsCache.set(key, { items, time: now });
-  if (countryNewsCache.size > 50) {
+  if (countryNewsCache.size > 100) {
     const oldest = [...countryNewsCache.entries()].sort((a, b) => a[1].time - b[1].time)[0];
     if (oldest) countryNewsCache.delete(oldest[0]);
   }
@@ -721,13 +729,15 @@ async function getCountryNewsCached(countryCode: string): Promise<NewsSummaryIte
 export async function getMarketNewsSummaryAsync(
   countryCode: string,
   lang: ReportLanguage = "ko",
-  options?: { categories?: ("b2b" | "b2c" | "both")[] }
+  options?: { categories?: ("b2b" | "b2c" | "both")[]; categoryFilter?: string }
 ): Promise<NewsSummaryItem[]> {
   const stub = NEWS_SUMMARY_STUB[lang] ?? NEWS_SUMMARY_STUB.ko;
   const date = new Date().toISOString().slice(0, 10);
   const stubWithDate = stub.map((item) => ({ ...item, date: item.date || date }));
-  const live = await getCountryNewsCached(countryCode || "ALL");
+  
+  const live = await getCountryNewsCached(countryCode || "ALL", options?.categoryFilter);
   let liveWithDate = live.map((item) => ({ ...item, date: item.date || date }));
+  
   const cats = options?.categories;
   if (Array.isArray(cats) && cats.length > 0) {
     liveWithDate = liveWithDate.filter((item) => cats.includes(item.b2b_b2c));
