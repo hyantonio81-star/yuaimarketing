@@ -180,6 +180,13 @@ export interface RunPipelineOptions {
   bgmMood?: string;
   bgmVolume?: number;
   platforms?: DeployPlatform[];
+  /** AI의 전략적 선택 근거 (Self-Optimization Reasoning) */
+  reasoning?: string;
+  category?: string;
+  /** 원본 뉴스 언어 */
+  sourceLanguage?: string;
+  /** 타겟 언어 (문화 교류용) */
+  languageOverride?: string;
   /** OSMU 활성화: 영상 생성 시 블로그 포스트 자동 동 동시 생성 */
   enableOsmu?: boolean;
 }
@@ -210,6 +217,10 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     bgmVolume = defaults?.bgmVolume ?? 0.15,
     platforms = ["youtube"],
     enableOsmu = true, // 기본값 true로 설정하여 OSMU 시너지 극대화
+    reasoning,
+    category,
+    sourceLanguage,
+    languageOverride,
   } = options ?? {};
 
   const uploadMode = uploadModeOpt ?? (defaults?.autoUpload === false ? "review_first" : "immediate");
@@ -233,6 +244,10 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     bgmVolume: bgmVolume ?? defaults?.bgmVolume ?? 0.15,
     platforms: platforms?.length ? platforms : ["youtube"],
     enableOsmu,
+    reasoning,
+    category,
+    sourceLanguage,
+    languageOverride,
   };
 
   const jobId = `job-${Date.now()}-${simpleHash(keywords.join(","))}`;
@@ -261,10 +276,13 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
 
   try {
     job.status = "collecting";
+    job.reasoning = merged.reasoning; // AI 전략 근거 기록
     job.updatedAt = new Date().toISOString();
     await persistJobs();
 
-    const topics = await collectTrendTopics(keywords.length ? keywords : ["YouTube Shorts", "트렌드"]);
+    const topics = await collectTrendTopics(keywords.length ? keywords : ["YouTube Shorts", "트렌드"], {
+      category: merged.category,
+    });
     const topic = topics[0];
     job.topic = topic;
 

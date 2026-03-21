@@ -150,11 +150,16 @@ export async function runAutonomousShortsBatch(): Promise<BatchResult> {
   try {
     const { getMarketNewsSummaryAsync } = await import("./marketIntelService.js");
     const { runPipelineOnce } = await import("./shortsAgentService.js");
+    const { analyzePerformanceAndSuggest } = await import("./shorts/shortsStatsService.js");
 
-    // 1. 시간대별 카테고리 로테이션 설정
+    // 0. AI 자율 성과 분석 및 전략 수립
+    const aiStrategy = await analyzePerformanceAndSuggest();
+    console.log(`[AI Self-Optimization] Reasoning: ${aiStrategy.reasoning}`);
+
+    // 1. 시간대별 카테고리 로테이션 설정 (AI 추천이 있으면 우선 사용)
     const categories = ["economy", "ai", "health", "lifestyle", "k-culture", "latam", "silver"];
     const hour = new Date().getHours();
-    const currentCategory = categories[hour % categories.length];
+    const currentCategory = aiStrategy.suggestedCategory || categories[hour % categories.length];
 
     // 2. 문화 교류 로직 (Source Language -> Target Language)
     // - LATAM 뉴스(스페인어) -> 한국어 Shorts
@@ -186,13 +191,16 @@ export async function runAutonomousShortsBatch(): Promise<BatchResult> {
 
     // 4. 상위 3개 이슈에 대해 각각 Shorts 파이프라인 실행
     for (const topic of topNews) {
-      const keywords = [topic.title];
+      // AI 부스트 키워드가 있으면 추가
+      const keywords = [topic.title, ...(aiStrategy.boostKeywords || [])];
+      
       const job = await runPipelineOnce(keywords, {
         uploadMode: "immediate",
         platforms: ["youtube"],
-        // @ts-ignore - 프롬프트에 타겟 언어 및 문화 교류 의도 전달 (스크립트 에이전트에서 처리)
-        languageOverride: targetLanguage,
+        // AI 전략 근거 전달
+        reasoning: aiStrategy.reasoning,
         category: currentCategory,
+        languageOverride: targetLanguage,
         sourceLanguage: (topic as any).language
       });
       jobIds.push(job.jobId);
@@ -203,8 +211,8 @@ export async function runAutonomousShortsBatch(): Promise<BatchResult> {
 
     return {
       status: "ok",
-      message: `Autonomous shorts [${currentCategory}] triggered for ${topNews.length} topics (Target: ${targetLanguage})`,
-      details: { jobIds, topics, category: currentCategory, targetLanguage },
+      message: `Autonomous shorts [${currentCategory}] triggered for ${topNews.length} topics. Reasoning: ${aiStrategy.reasoning}`,
+      details: { jobIds, topics, category: currentCategory, targetLanguage, aiReasoning: aiStrategy.reasoning },
     };
   } catch (e) {
     return {

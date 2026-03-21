@@ -7,6 +7,7 @@ export interface TrendTopic {
   title: string;
   summary: string;
   source: "youtube" | "manual";
+  category?: string;
   publishedAt?: string;
   score?: number;
 }
@@ -79,6 +80,8 @@ export interface ShortsPipelineJob {
   videoPath?: string;
   /** Supabase Storage 영구 URL */
   supabaseUrl?: string;
+  /** AI의 전략적 선택 근거 (Self-Optimization Reasoning) */
+  reasoning?: string;
   /** 보관 만료일 ISO 문자열 (저장 정책용) */
   expiresAt?: string;
   /** 파일 삭제된 시점 (만료/상한 정리 후 체크리스트만 남을 때) */

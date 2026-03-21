@@ -17,6 +17,7 @@ function simpleHash(str: string): number {
 
 export interface CollectTrendOptions {
   maxPerKeyword?: number;
+  category?: string;
 }
 
 /** 키워드별 YouTube 검색 및 Google 검색 보강으로 트렌드 주제 후보 수집 */
@@ -25,6 +26,7 @@ export async function collectTrendTopics(
   options?: CollectTrendOptions
 ): Promise<TrendTopic[]> {
   const maxPer = options?.maxPerKeyword ?? 5;
+  const category = options?.category ?? "general";
   const topics: TrendTopic[] = [];
   const seen = new Set<string>();
 
@@ -64,6 +66,7 @@ export async function collectTrendTopics(
           title: it.title ?? "",
           summary,
           source: "youtube",
+          category,
           publishedAt: it.publishedAt ?? undefined,
           score: (simpleHash(it.title + it.channelId) % 100) + (extraContext ? 10 : 0), // 정보 보강된 경우 가산점
         });
@@ -78,6 +81,7 @@ export async function collectTrendTopics(
           title: `${kw} 관련 트렌드`,
           summary: "수동/스텁 주제 (YouTube API 미설정 시)",
           source: "manual",
+          category,
           score: 50,
         });
       }
@@ -91,6 +95,7 @@ export async function collectTrendTopics(
       title: "YouTube Shorts 트렌드 예시",
       summary: "에이전트가 트렌드를 수집한 뒤 스크립트·이미지·영상을 생성합니다.",
       source: "manual",
+      category: "general",
       score: 60,
     });
   }
