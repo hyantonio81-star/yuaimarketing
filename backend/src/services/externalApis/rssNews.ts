@@ -28,9 +28,12 @@ const RSS_FEEDS: { url: string; source: string; b2b_b2c: "b2b" | "b2c" | "both";
   { url: "https://www.medicalnewstoday.com/feed/rss", source: "Medical News Today", b2b_b2c: "b2c", category: "health", language: "en" },
   { url: "https://rss.nytimes.com/services/xml/rss/nyt/Health.xml", source: "NYT Health", b2b_b2c: "b2c", category: "health", language: "en" },
 
-  // Lifestyle, Pets, Family
+  // Lifestyle, Pets, Family, Silver Culture
   { url: "https://www.thesprucepets.com/rss", source: "The Spruce Pets", b2b_b2c: "b2c", category: "lifestyle", language: "en" },
   { url: "https://www.scarymommy.com/feed", source: "Scary Mommy (Family)", b2b_b2c: "b2c", category: "lifestyle", language: "en" },
+  { url: "https://www.mcknights.com/feed/", source: "McKnight's Senior Living", b2b_b2c: "both", category: "silver", language: "en" },
+  { url: "https://www.aarp.org/rss/all.rss", source: "AARP News", b2b_b2c: "b2c", category: "silver", language: "en" },
+  { url: "https://www.silverindustry.biz/feed/", source: "Silver Economy News", b2b_b2c: "b2b", category: "silver", language: "en" },
 
   // K-Pop & Korean Culture (English sources for global reach)
   { url: "https://www.soompi.com/feed", source: "Soompi", b2b_b2c: "b2c", category: "k-culture", language: "en" },

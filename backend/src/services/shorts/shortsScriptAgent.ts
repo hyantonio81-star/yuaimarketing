@@ -59,6 +59,8 @@ export function generateScriptForTopic(topic: TrendTopic, avatarPresetId?: strin
     intro = "[중남미 현지 소식] ";
   } else if (opts.category === "k-culture" && targetLang === "es") {
     intro = "[Desde Corea] ";
+  } else if (opts.category === "silver") {
+    intro = targetLang === "ko" ? "[글로벌 실버 케어] " : "[Silver Care Global] ";
   }
 
   const hook = `${intro}${topic.title.slice(0, 30)}${topic.title.length > 30 ? "…" : ""}!`;
@@ -79,6 +81,13 @@ export function generateScriptForTopic(topic: TrendTopic, avatarPresetId?: strin
       id: "aff-kpop",
       name: "K-POP 공식 굿즈",
       linkUrl: "https://yuanto.com/shop/kpop",
+      displayTimingSeconds: targetSec - 3,
+    };
+  } else if (category === "silver") {
+    affiliateItem = {
+      id: "aff-silver",
+      name: "실버 케어 필수템(보행기/욕창방지 등)",
+      linkUrl: "https://yuanto.com/shop/silver-care",
       displayTimingSeconds: targetSec - 3,
     };
   }

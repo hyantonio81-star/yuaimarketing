@@ -152,17 +152,20 @@ export async function runAutonomousShortsBatch(): Promise<BatchResult> {
     const { runPipelineOnce } = await import("./shortsAgentService.js");
 
     // 1. 시간대별 카테고리 로테이션 설정
-    const categories = ["economy", "ai", "health", "lifestyle", "k-culture", "latam"];
+    const categories = ["economy", "ai", "health", "lifestyle", "k-culture", "latam", "silver"];
     const hour = new Date().getHours();
     const currentCategory = categories[hour % categories.length];
 
     // 2. 문화 교류 로직 (Source Language -> Target Language)
     // - LATAM 뉴스(스페인어) -> 한국어 Shorts
     // - K-Culture 뉴스(영어/한국어) -> 스페인어 Shorts
+    // - Silver 뉴스(영어) -> 한국어/스페인어 교차
     let targetLanguage = "en";
     if (currentCategory === "latam") targetLanguage = "ko";
     else if (currentCategory === "k-culture") targetLanguage = "es";
-    else if (hour % 2 === 0) targetLanguage = "ko"; // 나머지는 교차로 한국어/영어 섞기
+    else if (currentCategory === "silver") {
+      targetLanguage = hour % 2 === 0 ? "ko" : "es"; // 실버 정보는 한국과 중남미 양쪽으로 확산
+    } else if (hour % 2 === 0) targetLanguage = "ko"; 
 
     // 3. 해당 카테고리 뉴스 수집
     const news = await getMarketNewsSummaryAsync("ALL", "en", { 
