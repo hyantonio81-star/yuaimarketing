@@ -107,6 +107,7 @@ export default function ShortsAgent() {
   const [defaultsSaving, setDefaultsSaving] = useState(false);
   const [contentLanguage, setContentLanguage] = useState("ko");
   const [videoUrls, setVideoUrls] = useState({});
+  const [ffmpegInstalled, setFfmpegInstalled] = useState(true);
 
   const ensureVideoUrl = (jobId) => {
     if (!jobId || videoUrls[jobId]) return;
@@ -158,6 +159,10 @@ export default function ShortsAgent() {
     shortsApi.getPlatforms()
       .then((d) => { if (Array.isArray(d?.platforms) && d.platforms.length) setAvailablePlatforms(d.platforms); })
       .catch((e) => setYoutubeMessage({ type: "error", text: e?.apiMessage || e?.message || t("shortsAgent.youtubeError") }));
+    
+    shortsApi.getHealth()
+      .then((d) => setFfmpegInstalled(d?.ffmpegInstalled ?? true))
+      .catch(() => setFfmpegInstalled(true)); // 에러 시 기본값 true (보수적 접근)
   }, []);
 
   /** 선택한 계정의 세부옵션 로드 (계정 변경 시 자동 + 불러오기 버튼) */
@@ -469,6 +474,17 @@ export default function ShortsAgent() {
               <AlertTriangle className="w-5 h-5 shrink-0" />
               <span>{t("shortsAgent.youtubeNotConnectedBanner")}</span>
               <Link to="/settings/connections" className="inline-flex items-center gap-1 font-medium text-amber-700 dark:text-amber-300 hover:underline">
+                <ExternalLink className="w-4 h-4" />
+                {t("shortsAgent.setupGuideLink")}
+              </Link>
+            </div>
+          )}
+
+          {!ffmpegInstalled && (
+            <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive dark:text-red-400">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <span>{t("shortsAgent.ffmpegNotInstalled")}</span>
+              <Link to="/docs/FFMPEG_SETUP.md" className="inline-flex items-center gap-1 font-medium hover:underline">
                 <ExternalLink className="w-4 h-4" />
                 {t("shortsAgent.setupGuideLink")}
               </Link>

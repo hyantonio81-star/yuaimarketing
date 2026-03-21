@@ -46,15 +46,30 @@ export interface ProactiveAlertsResult {
 }
 
 const DAILY_SCHEDULE: Record<string, string> = {
-  "02:00": "market_intel_update",
-  "03:00": "competitor_monitoring",
-  "04:00": "inventory_sync",
-  "05:00": "price_optimization",
-  "06:00": "tender_monitoring",
-  "07:00": "generate_daily_report",
-  "09:00": "churn_prevention_check",
-  "12:00": "midday_performance_check",
-  "18:00": "eod_summary",
+  "00:00": "autonomous_shorts_production",
+  "01:00": "autonomous_shorts_production",
+  "02:00": "market_intel_update, autonomous_shorts_production",
+  "03:00": "competitor_monitoring, autonomous_shorts_production",
+  "04:00": "inventory_sync, autonomous_shorts_production",
+  "05:00": "price_optimization, autonomous_shorts_production",
+  "06:00": "tender_monitoring, autonomous_shorts_production",
+  "07:00": "generate_daily_report, autonomous_shorts_production",
+  "08:00": "autonomous_shorts_production",
+  "09:00": "churn_prevention_check, autonomous_shorts_production",
+  "10:00": "autonomous_shorts_production",
+  "11:00": "autonomous_shorts_production",
+  "12:00": "midday_performance_check, autonomous_shorts_production",
+  "13:00": "autonomous_shorts_production",
+  "14:00": "autonomous_shorts_production",
+  "15:00": "autonomous_shorts_production",
+  "16:00": "autonomous_shorts_production",
+  "17:00": "autonomous_shorts_production",
+  "18:00": "eod_summary, autonomous_shorts_production",
+  "19:00": "autonomous_shorts_production",
+  "20:00": "autonomous_shorts_production",
+  "21:00": "autonomous_shorts_production",
+  "22:00": "autonomous_shorts_production",
+  "23:00": "autonomous_shorts_production",
 };
 
 function classifyIntent(request: string): Intent {
@@ -107,60 +122,75 @@ export async function getDailyRoutineAsync(): Promise<DailyRoutineResult & { las
 }
 
 export async function runDailyRoutineTask(taskKey: string): Promise<{ status: string; message?: string; details?: Record<string, unknown> }> {
-  const task = DAILY_SCHEDULE[taskKey];
-  if (!task) return { status: "error", message: "Unknown task" };
+  const taskValue = DAILY_SCHEDULE[taskKey];
+  if (!taskValue) return { status: "error", message: "Unknown task" };
 
-  const runId = await recordRoutineRunStart(taskKey, task);
+  const tasks = taskValue.split(",").map(t => t.trim());
+  const runId = await recordRoutineRunStart(taskKey, taskValue);
+  
   try {
-    let result: { status: string; message?: string; details?: Record<string, unknown> };
-    if (task === "inventory_sync") {
-      const { runB2cInventorySyncTask } = await import("./b2cRoutineTasks.js");
-      const out = await runB2cInventorySyncTask();
-      result = { status: out.status, message: out.message, details: out.details };
-    } else if (task === "price_optimization") {
-      const { runB2cPriceOptimizationTask } = await import("./b2cRoutineTasks.js");
-      const out = await runB2cPriceOptimizationTask();
-      result = { status: out.status, message: out.message, details: out.details };
-    } else if (task === "churn_prevention_check") {
-      const { runB2cChurnPreventionTask } = await import("./b2cRoutineTasks.js");
-      const out = await runB2cChurnPreventionTask();
-      result = { status: out.status, message: out.message, details: out.details };
-    } else if (task === "market_intel_update") {
-      const { runDataRefreshBatch } = await import("./nexusRoutineBatches.js");
-      const out = await runDataRefreshBatch();
-      result = { status: out.status, message: out.message, details: out.details };
-    } else if (task === "competitor_monitoring") {
-      const { runMonitoringBatch } = await import("./nexusRoutineBatches.js");
-      const out = await runMonitoringBatch();
-      result = { status: out.status, message: out.message, details: out.details };
-    } else if (task === "tender_monitoring") {
-      const { runTenderCheckBatch } = await import("./nexusRoutineBatches.js");
-      const out = await runTenderCheckBatch();
-      result = { status: out.status, message: out.message, details: out.details };
-    } else if (task === "generate_daily_report") {
-      const { runDailyReportBatch } = await import("./nexusRoutineBatches.js");
-      const out = await runDailyReportBatch();
-      result = { status: out.status, message: out.message, details: out.details };
-    } else if (task === "midday_performance_check") {
-      const { runMiddayCheckBatch } = await import("./nexusRoutineBatches.js");
-      const out = await runMiddayCheckBatch();
-      result = { status: out.status, message: out.message, details: out.details };
-    } else if (task === "eod_summary") {
-      const { runEodSummaryBatch } = await import("./nexusRoutineBatches.js");
-      const out = await runEodSummaryBatch();
-      result = { status: out.status, message: out.message, details: out.details };
-    } else {
-      result = { status: "ok", message: `Task ${task} executed (stub)` };
+    const results: any[] = [];
+    
+    for (const task of tasks) {
+      let result: { status: string; message?: string; details?: Record<string, unknown> };
+      if (task === "inventory_sync") {
+        const { runB2cInventorySyncTask } = await import("./b2cRoutineTasks.js");
+        const out = await runB2cInventorySyncTask();
+        result = { status: out.status, message: out.message, details: out.details };
+      } else if (task === "price_optimization") {
+        const { runB2cPriceOptimizationTask } = await import("./b2cRoutineTasks.js");
+        const out = await runB2cPriceOptimizationTask();
+        result = { status: out.status, message: out.message, details: out.details };
+      } else if (task === "churn_prevention_check") {
+        const { runB2cChurnPreventionTask } = await import("./b2cRoutineTasks.js");
+        const out = await runB2cChurnPreventionTask();
+        result = { status: out.status, message: out.message, details: out.details };
+      } else if (task === "market_intel_update") {
+        const { runDataRefreshBatch } = await import("./nexusRoutineBatches.js");
+        const out = await runDataRefreshBatch();
+        result = { status: out.status, message: out.message, details: out.details };
+      } else if (task === "competitor_monitoring") {
+        const { runMonitoringBatch } = await import("./nexusRoutineBatches.js");
+        const out = await runMonitoringBatch();
+        result = { status: out.status, message: out.message, details: out.details };
+      } else if (task === "tender_monitoring") {
+        const { runTenderCheckBatch } = await import("./nexusRoutineBatches.js");
+        const out = await runTenderCheckBatch();
+        result = { status: out.status, message: out.message, details: out.details };
+      } else if (task === "generate_daily_report") {
+        const { runDailyReportBatch } = await import("./nexusRoutineBatches.js");
+        const out = await runDailyReportBatch();
+        result = { status: out.status, message: out.message, details: out.details };
+      } else if (task === "midday_performance_check") {
+        const { runMiddayCheckBatch } = await import("./nexusRoutineBatches.js");
+        const out = await runMiddayCheckBatch();
+        result = { status: out.status, message: out.message, details: out.details };
+      } else if (task === "eod_summary") {
+        const { runEodSummaryBatch } = await import("./nexusRoutineBatches.js");
+        const out = await runEodSummaryBatch();
+        result = { status: out.status, message: out.message, details: out.details };
+      } else if (task === "autonomous_shorts_production") {
+        const { runAutonomousShortsBatch } = await import("./nexusRoutineBatches.js");
+        const out = await runAutonomousShortsBatch();
+        result = { status: out.status, message: out.message, details: out.details };
+      } else {
+        result = { status: "ok", message: `Task ${task} executed (stub)` };
+      }
+      results.push(result);
     }
+
+    const finalStatus = results.some(r => r.status === "error") ? "error" : "ok";
+    const finalMessage = results.map(r => r.message).filter(Boolean).join(" | ");
+    
     if (runId) {
       await recordRoutineRunFinish(
         runId,
-        result.status === "error" ? "error" : "success",
-        result.message,
-        result.details
+        finalStatus === "error" ? "error" : "success",
+        finalMessage,
+        { tasks_count: results.length }
       );
     }
-    return result;
+    return { status: finalStatus, message: finalMessage };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (runId) await recordRoutineRunFinish(runId, "error", message, undefined);

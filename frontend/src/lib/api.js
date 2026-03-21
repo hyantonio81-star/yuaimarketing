@@ -67,17 +67,40 @@ api.interceptors.response.use(
 );
 
 /**
- * Extract a safe string from API error (response.data.error or .message, or object.message).
- * Use as: getApiErrorMessage(e, t("b2cCommerce.errGeneric"))
+ * Extract a safe string from API error (any type of input).
+ * Always returns a string to avoid React Error #31.
  */
 export function getApiErrorMessage(e, fallback = "An error occurred.") {
-  const err = e?.response?.data?.error;
-  const msg = e?.response?.data?.message;
+  if (!e) return fallback;
+  if (typeof e === "string") return e;
+
+  // Handle Axios/Fetch error objects
+  const data = e?.response?.data;
+  const err = data?.error;
+  const msg = data?.message;
+
   if (typeof err === "string") return err;
   if (typeof msg === "string") return msg;
+
+  // Handle nested error objects like { error: { message: "..." } }
   if (err && typeof err === "object" && typeof err.message === "string") return err.message;
-  if (e?.apiMessage && typeof e.apiMessage === "string") return e.apiMessage;
-  return fallback;
+  if (msg && typeof msg === "object" && typeof msg.message === "string") return msg.message;
+
+  // Handle standard Error objects or custom apiMessage
+  if (e.apiMessage && typeof e.apiMessage === "string") return e.apiMessage;
+  if (e.message && typeof e.message === "string") return e.message;
+
+  // Fallback to JSON stringify if it's an object we don't recognize
+  try {
+    if (typeof e === "object") {
+      const str = JSON.stringify(e);
+      return str.length > 100 ? str.slice(0, 100) + "..." : str;
+    }
+  } catch (_) {
+    // ignore
+  }
+
+  return String(e) || fallback;
 }
 
 /** Market Intel (Pillar 1) */
@@ -247,6 +270,8 @@ export const shortsApi = {
     }).then((r) => r.data),
   getPlatforms: () =>
     api.get("/shorts/platforms").then((r) => r.data),
+  getHealth: () =>
+    api.get("/shorts/health").then((r) => r.data),
   getJobs: (limit) =>
     api.get("/shorts/jobs", { params: { limit } }).then((r) => r.data),
   getJob: (jobId) =>

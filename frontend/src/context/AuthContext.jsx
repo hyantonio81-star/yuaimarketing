@@ -18,8 +18,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 개발 모드에서는 실제 세션과 관계없이 항상 관리자 권한을 가진 유저로 초기화합니다.
-    if (import.meta.env.DEV) {
+    // 개발 모드 자동 로그인 바이패스 (VITE_DEV_SKIP_AUTH가 'true'일 때만 작동)
+    if (import.meta.env.DEV && import.meta.env.VITE_DEV_SKIP_AUTH === "true") {
       const devUser = {
         id: "dev-user",
         email: "anto@yuanto.com",

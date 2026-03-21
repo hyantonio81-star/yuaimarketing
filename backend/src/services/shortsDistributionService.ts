@@ -1,7 +1,7 @@
 import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 import type { DistributionQueueItem, ShortsPipelineJob } from "./shorts/shortsTypes.js";
 import { getJobAsync, persistJobs } from "./shortsAgentService.js";
-import { deployToPlatforms } from "./shorts/shortsDeployAgent.js";
+import { deployToPlatforms, type DeployPlatform } from "./shorts/shortsDeployAgent.js";
 
 const QUEUE_TABLE = "shorts_distribution_queue";
 
@@ -133,18 +133,21 @@ export async function processDistributionQueue(): Promise<void> {
       
       console.log(`[Distribution Worker] Publishing job ${item.jobId} to ${item.platform}...`);
       
-      const { results } = await deployToPlatforms(
+      const { results, errors } = await deployToPlatforms(
         videoSource!,
         {
           title: item.metadata?.title || job.script?.topicTitle || "AI Content",
           description: item.metadata?.description || job.script?.hook || "",
         },
-        [item.platform],
+        [item.platform as DeployPlatform],
         "default"
       );
 
-      const result = results?.[item.platform];
-      if (result?.success) {
+      // TS7053 에러 방지를 위해 any 캐스팅 후 인덱싱
+      const result = (results as any)[item.platform];
+      const platformError = (errors as any)[item.platform];
+
+      if (result) {
         await supabase.from(QUEUE_TABLE).update({ 
           status: "done", 
           publishedAt: new Date().toISOString(),
@@ -152,7 +155,7 @@ export async function processDistributionQueue(): Promise<void> {
           updatedAt: new Date().toISOString() 
         }).eq("id", item.id);
       } else {
-        throw new Error(result?.error || "Deployment failed");
+        throw new Error(platformError || "Deployment failed");
       }
 
     } catch (err) {

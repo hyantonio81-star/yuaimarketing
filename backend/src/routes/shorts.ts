@@ -39,6 +39,7 @@ import {
   ensureYoutubeStoreLoaded,
   MAX_YT_ACCOUNTS,
 } from "../services/youtubeUploadService.js";
+import { checkFfmpegInstalled } from "../services/shorts/shortsHealthService.js";
 import { AVATAR_PRESETS } from "../services/shortsImageService.js";
 import { getChannelDefaults, setChannelDefaults } from "../services/shortsChannelDefaults.js";
 import {
@@ -81,6 +82,12 @@ export async function shortsRoutes(app: FastifyInstance) {
 
   /** 배포 가능 플랫폼 목록 */
   app.get("/platforms", async () => ({ platforms: DEPLOY_PLATFORMS }));
+
+  /** Shorts 시스템 헬스체크 (FFmpeg 등) */
+  app.get("/health", async () => {
+    const ffmpegInstalled = await checkFfmpegInstalled();
+    return { ffmpegInstalled };
+  });
 
   /** YouTube 연동 계정 목록 (최대 5개) */
   app.get("/youtube/accounts", async () => {

@@ -89,3 +89,15 @@ export async function deleteProduct(id) {
   }
   return { ok: true };
 }
+
+/**
+ * Ensures error is always a string.
+ */
+export function getErrorMessage(error) {
+  if (!error) return "";
+  if (typeof error === "string") return error;
+  if (typeof error === "object") {
+    return error.message || error.error || JSON.stringify(error);
+  }
+  return String(error);
+}

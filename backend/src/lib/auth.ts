@@ -13,8 +13,8 @@ export interface AuthUser {
 }
 
 export async function getAuthUserFromRequest(req: FastifyRequest): Promise<AuthUser | null> {
-  // 로컬 개발 및 리뷰를 위해 개발 모드에서는 모든 요청을 관리자 권한으로 자동 승인합니다.
-  if (process.env.NODE_ENV === "development") {
+  // 로컬 개발 모드 바이패스 (NODE_ENV가 development이고 DEV_SKIP_AUTH가 'true'일 때만 작동)
+  if (process.env.NODE_ENV === "development" && process.env.DEV_SKIP_AUTH === "true") {
     return {
       id: "dev-admin-id",
       email: "anto@yuanto.com",
@@ -32,9 +32,9 @@ export async function getAuthUserFromRequest(req: FastifyRequest): Promise<AuthU
     const { data: { user }, error } = await supabase.auth.getUser(token);
     
     // 로컬 개발 환경에서 Supabase 인증이 일시적으로 실패할 경우 (네트워크 등) 
-    // 토큰이 존재한다면 테스트를 위해 기본 사용자 정보를 반환하는 로직 추가 (리뷰용)
+    // 토큰이 존재한다면 테스트를 위해 기본 사용자 정보를 반환하는 로직 추가 (DEV_SKIP_AUTH 가 'true'일 때만)
     if (error || !user) {
-      if (process.env.NODE_ENV === "development") {
+      if (process.env.NODE_ENV === "development" && process.env.DEV_SKIP_AUTH === "true") {
         console.warn("[Auth] getUser failed, but allowing in development mode. Error:", error?.message);
         // 토큰이 있는 경우 최소한의 유저 정보 반환 (주의: 운영 환경에서는 절대 금지)
         return {

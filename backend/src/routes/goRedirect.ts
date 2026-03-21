@@ -6,6 +6,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -49,7 +50,7 @@ export async function goRedirectRoutes(app: FastifyInstance) {
         referrer: request.headers.referer || null,
         user_agent: request.headers["user-agent"] || null,
         ip_hash: request.ip // 개인정보보호를 위해 IP 전체 저장보다는 해싱 권장되나 일단 기록
-      }).then(({ error }) => {
+      }).then(({ error }: { error: any }) => {
         if (error) app.log.warn(`Click tracking error for ${id}: ${error.message}`);
       });
     }

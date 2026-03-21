@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Store, Link2, CheckCircle, XCircle } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import SectionCard from "../components/SectionCard";
-import { ecommerceApi } from "../lib/api.js";
+import { ecommerceApi, getApiErrorMessage } from "../lib/api.js";
 import MultiChannelSection from "./B2C/MultiChannelSection";
 
 export default function Ecommerce() {
@@ -49,7 +49,7 @@ export default function Ecommerce() {
       setMessage(t("ecommerce.connectSuccess"));
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
-      setError(err?.response?.data?.error ?? err?.message ?? t("settings.connectFailed"));
+      setError(getApiErrorMessage(err, t("settings.connectFailed")));
     } finally {
       setConnecting(false);
     }
@@ -66,7 +66,7 @@ export default function Ecommerce() {
       setMessage(t("ecommerce.disconnectSuccess"));
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
-      setError(err?.response?.data?.error ?? err?.message ?? t("settings.disconnectFailed"));
+      setError(getApiErrorMessage(err, t("settings.disconnectFailed")));
     } finally {
       setDisconnecting(false);
     }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { login, setAdminToken } from "../../lib/landingAdminApi";
+import { login, setAdminToken, getErrorMessage } from "../../lib/landingAdminApi";
 
 export default function TiendaAdminLogin({ onLogin }) {
   const [password, setPassword] = useState("");
@@ -19,7 +19,7 @@ export default function TiendaAdminLogin({ onLogin }) {
       onLogin?.();
       navigate("/tienda-admin", { replace: true });
     } else {
-      setError(result.error || "Contraseña incorrecta.");
+      setError(getErrorMessage(result.error) || "Contraseña incorrecta.");
     }
   };
 

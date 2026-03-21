@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import SectionCard from "../components/SectionCard";
 import { useLanguage } from "../context/LanguageContext.jsx";
-import { shortsApi, threadsCommerceApi, ecommerceApi, userSettingsApi } from "../lib/api.js";
+import { shortsApi, threadsCommerceApi, ecommerceApi, userSettingsApi, getApiErrorMessage } from "../lib/api.js";
 
 const CONNECTION_PIN_VERIFIED_KEY = "connectionPinVerified";
 const CONNECTION_PIN_TTL_MS = 15 * 60 * 1000; // 15 min
@@ -289,7 +289,7 @@ function YouTubeAccountsSection({ t }) {
         if (d?.url) window.location.href = d.url;
         else setError(d?.error || t("settings.youtubeNotConfigured"));
       })
-      .catch((e) => setError(e?.response?.data?.error || e?.message || t("settings.connectFailed")))
+      .catch((e) => setError(getApiErrorMessage(e, t("settings.connectFailed"))))
       .finally(() => setConnectLoading(false));
   };
 
@@ -299,7 +299,7 @@ function YouTubeAccountsSection({ t }) {
     shortsApi
       .disconnectYoutube(key)
       .then(load)
-      .catch((e) => setError(e?.response?.data?.error || e?.message || t("settings.disconnectFailed")))
+      .catch((e) => setError(getApiErrorMessage(e, t("settings.disconnectFailed"))))
       .finally(() => setDisconnectKey(null));
   };
 
@@ -313,7 +313,7 @@ function YouTubeAccountsSection({ t }) {
       setProfiles((prev) => ({ ...prev, [key]: res?.profile ?? profile }));
       setExpandedProfileKey(null);
     } catch (e) {
-      setError(e?.response?.data?.error || e?.message || t("settings.connectFailed"));
+      setError(getApiErrorMessage(e, t("settings.connectFailed")));
     } finally {
       setProfileSaving((prev) => ({ ...prev, [key]: false }));
     }
@@ -332,7 +332,7 @@ function YouTubeAccountsSection({ t }) {
       await shortsApi.requestYoutubeAccount({ contactEmail, contactSiteUrl, purpose });
       setRequestSent(true);
     } catch (err) {
-      setError(err?.response?.data?.error || err?.message || t("settings.connectFailed"));
+      setError(getApiErrorMessage(err, t("settings.connectFailed")));
     } finally {
       setRequestLoading(false);
     }
@@ -469,7 +469,7 @@ function ConnectionPinCard({ pinConfigured, setPinConfigured, setPinVerified, t 
       setSetPinValue("");
       setSetPinConfirm("");
     } catch (err) {
-      setSetPinError(err?.response?.data?.error || err?.message || t("settings.connectFailed"));
+      setSetPinError(getApiErrorMessage(err, t("settings.connectFailed")));
     } finally {
       setSetPinLoading(false);
     }

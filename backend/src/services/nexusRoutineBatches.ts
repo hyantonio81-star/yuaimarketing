@@ -144,3 +144,49 @@ export async function runEodSummaryBatch(): Promise<BatchResult> {
     };
   }
 }
+
+/** 자율 Shorts 생산 — 세계 뉴스 및 주요 이슈 탐색 후 상위 3개 자동 생산 */
+export async function runAutonomousShortsBatch(): Promise<BatchResult> {
+  try {
+    const { getMarketNewsSummaryAsync } = await import("./marketIntelService.js");
+    const { runPipelineOnce } = await import("./shortsAgentService.js");
+
+    // 1. 최신 뉴스 수집 (전세계 대상)
+    const news = await getMarketNewsSummaryAsync("ALL", "en");
+    // YuantO Ai 소스(스텁) 제외하고 실제 뉴스만 상위 3개 추출
+    const topNews = news.filter((n) => n.source !== "YuantO Ai").slice(0, 3);
+
+    if (topNews.length === 0) {
+      return { status: "error", message: "No news found for shorts production" };
+    }
+
+    const jobIds: string[] = [];
+    const topics: string[] = [];
+
+    // 2. 상위 3개 이슈에 대해 각각 Shorts 파이프라인 실행
+    for (const topic of topNews) {
+      const keywords = [topic.title];
+      // 비동기로 실행되므로 루프에서 하나씩 트리거
+      const job = await runPipelineOnce(keywords, {
+        uploadMode: "immediate", // 자동 업로드
+        platforms: ["youtube"],
+      });
+      jobIds.push(job.jobId);
+      topics.push(topic.title);
+      
+      // 서버 부하 분산 및 API 호출 간격 확보 (3초 대기)
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    return {
+      status: "ok",
+      message: `Autonomous shorts production triggered for ${topNews.length} topics`,
+      details: { jobIds, topics },
+    };
+  } catch (e) {
+    return {
+      status: "error",
+      message: e instanceof Error ? e.message : "autonomous_shorts failed",
+    };
+  }
+}
