@@ -12,7 +12,12 @@ import {
   saveProducts,
   sanitizeSlug,
 } from "../lib/drProductsStore.js";
-import { landingAdminLogin, getLandingAdminToken, validateLandingAdminToken } from "../lib/landingAdminAuth.js";
+import {
+  landingAdminLogin,
+  getLandingAdminToken,
+  validateLandingAdminToken,
+  isLandingAdminPasswordConfigured,
+} from "../lib/landingAdminAuth.js";
 import { checkRateLimitLogin } from "../lib/rateLimit.js";
 
 export type { DrProduct };
@@ -53,6 +58,13 @@ export async function drProductsRoutes(app: FastifyInstance) {
         return reply.code(429).send({ error: "Too many login attempts. Try again later." });
       }
       const password = (request.body?.password ?? "").trim();
+      if (!isLandingAdminPasswordConfigured()) {
+        return reply.code(503).send({
+          error: "admin_password_not_configured",
+          message:
+            "LANDING_ADMIN_PASSWORD is not set on the server. Add it in Vercel Environment Variables (or backend .env) and redeploy.",
+        });
+      }
       const result = await landingAdminLogin(password);
       if (!result) return reply.code(401).send({ error: "Invalid password" });
       return reply.send({ token: result.token });

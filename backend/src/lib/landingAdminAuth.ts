@@ -13,6 +13,11 @@ function getPassword(): string {
   return (process.env.LANDING_ADMIN_PASSWORD || "").trim();
 }
 
+/** 운영자 비밀번호가 서버에 설정되어 있는지 (Vercel/.env에 LANDING_ADMIN_PASSWORD 필요) */
+export function isLandingAdminPasswordConfigured(): boolean {
+  return getPassword().length > 0;
+}
+
 function createToken(): string {
   return randomBytes(24).toString("base64url");
 }

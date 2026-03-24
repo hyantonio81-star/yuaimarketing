@@ -41,7 +41,16 @@ export async function login(password) {
     body: JSON.stringify({ password: String(password).trim() }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, error: data.error || "Login failed" };
+  if (!res.ok) {
+    if (res.status === 503 && data.error === "admin_password_not_configured") {
+      return {
+        ok: false,
+        error: data.message || data.error,
+        code: "admin_password_not_configured",
+      };
+    }
+    return { ok: false, error: data.message || data.error || "Login failed" };
+  }
   return { ok: true, token: data.token };
 }
 

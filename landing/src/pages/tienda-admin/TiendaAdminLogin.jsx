@@ -18,6 +18,12 @@ export default function TiendaAdminLogin({ onLogin }) {
       setAdminToken(result.token);
       onLogin?.();
       navigate("/tienda-admin", { replace: true });
+    } else if (result.code === "admin_password_not_configured") {
+      setError(
+        "El servidor no tiene contraseña de administrador configurada. " +
+          "En Vercel (o .env del backend) agregue LANDING_ADMIN_PASSWORD y vuelva a desplegar. " +
+          "서버에 LANDING_ADMIN_PASSWORD가 없습니다. Vercel 환경 변수에 설정 후 재배포하세요."
+      );
     } else {
       setError(getErrorMessage(result.error) || "Contraseña incorrecta.");
     }
