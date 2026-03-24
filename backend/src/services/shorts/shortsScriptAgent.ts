@@ -122,6 +122,13 @@ export async function generateScriptForTopic(topic: TrendTopic, avatarPresetId?:
     description = "시니어 삶의 질을 높이는 정보 가이드";
   }
 
+  const character: ShortsCharacter = {
+    name: characterName,
+    description,
+    tone,
+    imagePromptHint,
+  };
+
   // AI를 통한 스토리텔링 생성 시도
   const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
   const openaiKey = (process.env.OPENAI_API_KEY ?? "").trim();

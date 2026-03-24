@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const backendEnvPath = join(root, "backend", ".env");
+const frontendEnvPath = join(root, "frontend", ".env");
 
 const checks = [];
 
@@ -66,6 +67,51 @@ if (existsSync(backendEnvPath)) {
     ok: false,
     detail: "없음 — backend/.env.example 복사 후 Supabase 등 설정",
   });
+}
+
+// frontend/.env (Vite 로그인용)
+if (existsSync(frontendEnvPath)) {
+  let fe = "";
+  try {
+    fe = readFileSync(frontendEnvPath, "utf-8");
+  } catch {
+    fe = "";
+  }
+  const viteUrl = /\bVITE_SUPABASE_URL\s*=\s*https?:\/\//.test(fe);
+  const viteAnon =
+    /\bVITE_SUPABASE_ANON_KEY\s*=\s*eyJ/.test(fe) ||
+    (/\bVITE_SUPABASE_ANON_KEY\s*=\s*[^\s]+/.test(fe) && !/your-anon-key/.test(fe));
+  const feOk = viteUrl && viteAnon;
+  checks.push({
+    name: "frontend/.env (로그인)",
+    ok: feOk,
+    detail: feOk
+      ? "VITE_SUPABASE_URL·VITE_SUPABASE_ANON_KEY 설정됨"
+      : "VITE_SUPABASE_* 미설정 시 프로덕션 로그인 불가 — Vercel에도 동일 변수 필요",
+  });
+} else {
+  checks.push({
+    name: "frontend/.env",
+    ok: false,
+    detail: "없음 — frontend/.env.example 참고해 VITE_SUPABASE_* 설정",
+  });
+}
+
+// Tienda 비밀번호 (백엔드)
+if (existsSync(backendEnvPath)) {
+  try {
+    const be = readFileSync(backendEnvPath, "utf-8");
+    const landingPw = /\bLANDING_ADMIN_PASSWORD\s*=\s*\S+/.test(be);
+    checks.push({
+      name: "LANDING_ADMIN_PASSWORD",
+      ok: landingPw,
+      detail: landingPw
+        ? "설정됨 (Tienda /tienda-admin)"
+        : "미설정 — Tienda 로그인 503/실패. Vercel 백엔드에도 설정",
+    });
+  } catch {
+    /* ignore */
+  }
 }
 
 // Output

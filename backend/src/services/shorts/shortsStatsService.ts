@@ -1,7 +1,10 @@
 import { getSupabaseAdmin } from "../../lib/supabaseServer.js";
+import { loadJobsFromFile } from "../shortsJobStore.js";
+import type { ShortsPipelineJob } from "./shortsTypes.js";
 
 /**
  * Shorts 성과(조회수, 좋아요 등)를 추적하고 AI의 주제 선정에 피드백을 주기 위한 서비스.
+ * Job 메타데이터는 Supabase `shorts_jobs` 단일 행이 아니라 shortsJobStore(파일 또는 동일 테이블의 jobs 배열)와 동기화됩니다.
  */
 export interface VideoStats {
   jobId: string;
@@ -53,17 +56,12 @@ export async function getWinningTopics(limit = 5): Promise<string[]> {
 
   if (error || !data) return [];
 
-  // 2. 해당 job_id들의 주제/키워드 추출 (shorts_jobs 테이블 연동 필요)
-  const jobIds = data.map(d => d.job_id);
-  const { data: jobs, error: jobErr } = await supabase
-    .from("shorts_jobs")
-    .select("topic")
-    .in("id", jobIds);
-
-  if (jobErr || !jobs) return [];
-
-  const keywords = jobs
-    .map(j => (j.topic as any)?.keyword)
+  // 2. job_id → topic (shortsJobStore: data/shorts_jobs.json 또는 Supabase id=current 행의 jobs 배열)
+  const jobIds = [...new Set(data.map((d) => d.job_id))];
+  const allJobs = await loadJobsFromFile();
+  const byId = new Map(allJobs.map((j) => [j.jobId, j] as const));
+  const keywords = jobIds
+    .map((id) => (byId.get(id)?.topic as { keyword?: string } | undefined)?.keyword)
     .filter((k): k is string => !!k);
 
   // 빈도순 정렬
@@ -100,25 +98,21 @@ export async function analyzePerformanceAndSuggest(): Promise<{
       return { reasoning: "Not enough performance data. Continuing exploratory phase." };
     }
 
-    // 2. 해당 Job들의 카테고리/키워드 정보 매칭
-    const jobIds = stats.map(s => s.job_id);
-    const { data: jobs, error: jobsErr } = await supabase
-      .from("shorts_jobs")
-      .select("id, topic, script")
-      .in("id", jobIds);
-
-    if (jobsErr || !jobs) return { reasoning: "Failed to link stats with jobs." };
+    // 2. Job 메타데이터는 shortsJobStore와 매칭 (DB shorts_jobs는 id=current + jobs[] 구조)
+    const allJobs = await loadJobsFromFile();
+    const byId = new Map<string, ShortsPipelineJob>(allJobs.map((j) => [j.jobId, j]));
 
     // 3. LLM에 전달할 리포트 생성
-    const performanceReport = stats.map(s => {
-      const job = jobs.find(j => j.id === s.job_id);
+    const performanceReport = stats.map((s) => {
+      const job = byId.get(s.job_id);
+      const topic = job?.topic as { title?: string; category?: string; keyword?: string } | undefined;
       return {
-        title: (job?.topic as any)?.title,
-        category: (job?.topic as any)?.category,
-        keyword: (job?.topic as any)?.keyword,
+        title: topic?.title,
+        category: topic?.category,
+        keyword: topic?.keyword,
         views: s.views,
         likes: s.likes,
-        platform: s.platform
+        platform: s.platform,
       };
     });
 
