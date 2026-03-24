@@ -101,8 +101,15 @@
 ### docs SQL 복사본
 - `docs/supabase-b2c-migrations.sql`, `docs/supabase-24-7-migrations.sql` — SQL Editor 수동 실행용 (정본은 migrations 폴더와 동기)
 
+### Shorts·확장 테이블
+
+- `shorts_stats`, `shorts_jobs` — Shorts 통계·job 영속화 (`20260225120000_shorts_analytics.sql`).
+- `b2b_leads`, `link_clicks`, `review_analyses`, `kpi_goals`, `promotion_plans`, `channel_profiles_store`, `shorts_settings_store` — B2B/리뷰/KPI/프로모션/채널·Shorts 설정 (`20260225130000_extended_app_tables.sql`).
+
 ### 확인 사항
-- 프로덕션 Supabase에 위 마이그레이션 미적용 시 해당 기능은 파일/인메모리 폴백만 동작할 수 있음
+
+- 저장소의 **마이그레이션 정의**와 **원격 Supabase에 실제 적용 여부**는 별개입니다. 일부만 적용된 DB에서는 해당 `.from("…")` 기능만 파일/인메모리 폴백으로 동작할 수 있습니다.
+- 스키마 적용 순서·CLI: [SUPABASE_SCHEMA_RUNBOOK.md](./SUPABASE_SCHEMA_RUNBOOK.md)
 
 ---
 
@@ -112,5 +119,6 @@
 |------|------|------|
 | 서버 | ✅ | Fastify, `buildServer` + Vercel inject |
 | Vercel | ✅ | vercel.json, Root Directory는 저장소 구조에 맞게 |
-| CI | ✅ | `main`, lint + test + build, Vite CI 스킵 플래그 |
-| SQL | ✅ | migrations 4종 + RUNBOOK |
+| CI | ✅ | `main`, lint + test + build; Secrets로 `VITE_SUPABASE_*` 주입 + `VITE_ALLOW_BUILD_WITHOUT_SUPABASE`로 포크 호환 |
+| SQL (정의) | ✅ | `supabase/migrations/` 4종 + [SUPABASE_SCHEMA_RUNBOOK.md](./SUPABASE_SCHEMA_RUNBOOK.md) |
+| SQL (운영 DB) | ⚠️ | 프로젝트마다 `db push` 적용 필요; 미적용 시 일부 기능 폴백 |

@@ -38,8 +38,9 @@ jobs:
         continue-on-error: true
         run: npm audit --audit-level=high
 
-      # 프론트 프로덕션 빌드는 VITE_SUPABASE_* 필요. CI에는 기본으로 스킵 플래그(포크/PR 대비).
-      # 프로덕션과 동일한 번들 검증: Repository Secrets에 VITE_SUPABASE_URL·VITE_SUPABASE_ANON_KEY 추가 후 아래 env에서 ALLOW 줄을 제거.
+      # Policy: inject VITE_SUPABASE_* from Repository Secrets when set (prod-like bundle).
+      # Always set VITE_ALLOW_BUILD_WITHOUT_SUPABASE so forks/PRs without secrets still pass build.
+      # To fail CI when Supabase vars are missing, remove VITE_ALLOW_BUILD_WITHOUT_SUPABASE (main repo only).
       - name: Build (backend + frontend + landing)
         env:
           VITE_ALLOW_BUILD_WITHOUT_SUPABASE: "true"

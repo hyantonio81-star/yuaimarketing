@@ -51,8 +51,15 @@ This project uses **npm workspaces** with:
 
 ### Deploy / CI
 
-- **Vercel**: set env vars for API + **Vite** (`VITE_*`) and redeploy — [docs/SUPABASE_프론트_Vercel_설정.md](docs/SUPABASE_프론트_Vercel_설정.md), [docs/ENV_MATRIX.md](docs/ENV_MATRIX.md)
-- **GitHub Actions**: `.github/workflows/ci.yml` (lint, test, build)
+**Vercel (요약)**
+
+- Root / **Root Directory**: 저장소가 `nexus-ai` 루트면 비우거나 `.` (자세한 내용: [서버_파이프라인_CI_스키마_점검.md](docs/서버_파이프라인_CI_스키마_점검.md)의 Vercel 절).
+- Build: `npm run build` → `backend`·`frontend`·`landing` 산출물 + API는 `api/[[...path]].ts`.
+- **환경 변수**: API용 `SUPABASE_*`, 프론트용 `VITE_SUPABASE_*` 등 — 체크리스트 [docs/ENV_MATRIX.md](docs/ENV_MATRIX.md), 프론트 설정 [docs/SUPABASE_프론트_Vercel_설정.md](docs/SUPABASE_프론트_Vercel_설정.md). 적용 후 **Redeploy**.
+
+**Supabase DB**: 마이그레이션 적용 순서는 [docs/SUPABASE_SCHEMA_RUNBOOK.md](docs/SUPABASE_SCHEMA_RUNBOOK.md).
+
+**GitHub Actions**: `.github/workflows/ci.yml` — `main`에서 lint → test → build. CI용 Vite 정책은 RUNBOOK의 *GitHub Actions와 프론트 빌드* 절 참고.
 
 ### Docs index
 

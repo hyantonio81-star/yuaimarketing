@@ -1,0 +1,9 @@
+-- Seed file for local development (supabase db reset)
+-- Referenced by supabase/config.toml [db.seed] sql_paths = ["./seed.sql"]
+-- This file is intentionally minimal: all tables use IF NOT EXISTS DDL in migrations,
+-- so no seed data is required for the app to start.
+-- Add development fixture rows here if needed, e.g.:
+--
+-- INSERT INTO public.kpi_goals (organization_id, goals, updated_at)
+-- VALUES ('default', '[]', now())
+-- ON CONFLICT (organization_id) DO NOTHING;

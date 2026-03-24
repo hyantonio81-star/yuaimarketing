@@ -45,6 +45,7 @@ export async function goRedirectRoutes(app: FastifyInstance) {
     // 클릭 추적 (비동기, 리다이렉트 방해 금지) - 2026-03-20 build re-trigger
     const supabase = getSupabaseAdmin();
     if (supabase) {
+      // link_clicks.client_ip_hash: SHA-256 hex of the client IP only (never store raw IP).
       const rawIp = (request.ip || "").trim();
       const client_ip_hash = rawIp
         ? createHash("sha256").update(rawIp, "utf8").digest("hex")

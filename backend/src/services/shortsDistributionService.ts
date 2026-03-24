@@ -5,6 +5,23 @@ import { deployToPlatforms, type DeployPlatform } from "./shorts/shortsDeployAge
 
 const QUEUE_TABLE = "shorts_distribution_queue";
 
+/** Map a snake_case DB row to the camelCase DistributionQueueItem interface. */
+function rowToCamel(row: Record<string, any>): DistributionQueueItem {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    platform: row.platform,
+    status: row.status,
+    scheduledAt: row.scheduled_at,
+    publishedAt: row.published_at ?? undefined,
+    error: row.error ?? undefined,
+    retryCount: row.retry_count ?? 0,
+    metadata: row.metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 /** 플랫폼별 맞춤 메타데이터 생성 (AI 에이전트 모사) */
 function generatePlatformMetadata(job: ShortsPipelineJob, platform: string) {
   const baseTitle = job.script?.topicTitle || "AI Trend Video";
@@ -46,21 +63,22 @@ export async function addToDistributionQueue(
   const job = await getJobAsync(jobId);
   if (!job) throw new Error("Job not found");
 
-  const items: Partial<DistributionQueueItem>[] = platforms.map((platform, index) => {
+  // DB column names are snake_case; DistributionQueueItem uses camelCase for in-memory use.
+  const items = platforms.map((platform, index) => {
     const randomOffset = Math.floor(Math.random() * 15 * 60000);
     const scheduledDate = options.scheduledAt 
       ? new Date(new Date(options.scheduledAt).getTime() + (index * 3600000) + randomOffset) 
       : new Date(Date.now() + ((index + 1) * 3600000) + randomOffset);
 
     return {
-      jobId,
-      platform: platform as any,
-      status: "waiting",
-      scheduledAt: scheduledDate.toISOString(),
-      retryCount: 0,
+      job_id: jobId,
+      platform: platform as DistributionQueueItem["platform"],
+      status: "waiting" as const,
+      scheduled_at: scheduledDate.toISOString(),
+      retry_count: 0,
       metadata: generatePlatformMetadata(job, platform),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
   });
 
@@ -76,7 +94,8 @@ export async function addToDistributionQueue(
     job.updatedAt = new Date().toISOString();
     await persistJobs();
 
-    return data;
+    // Map snake_case DB rows back to camelCase interface
+    return (data as any[]).map(rowToCamel);
   } else {
     console.log(`[Distribution Queue] Added ${jobId} to ${platforms.join(", ")}`);
     return [];
@@ -91,11 +110,11 @@ export async function getDistributionQueue(limit = 50): Promise<DistributionQueu
   const { data, error } = await supabase
     .from(QUEUE_TABLE)
     .select("*")
-    .order("scheduledAt", { ascending: true })
+    .order("scheduled_at", { ascending: true })
     .limit(limit);
 
   if (error) throw error;
-  return data || [];
+  return (data as any[] ?? []).map(rowToCamel);
 }
 
 /** 
@@ -106,14 +125,16 @@ export async function processDistributionQueue(): Promise<void> {
   if (!supabase) return;
 
   const now = new Date().toISOString();
-  const { data: items, error } = await supabase
+  const { data: rows, error } = await supabase
     .from(QUEUE_TABLE)
     .select("*")
     .eq("status", "waiting")
-    .lte("scheduledAt", now)
+    .lte("scheduled_at", now)
     .limit(5);
 
-  if (error || !items) return;
+  if (error || !rows) return;
+
+  const items = (rows as any[]).map(rowToCamel);
 
   for (const item of items) {
     const job = await getJobAsync(item.jobId);
@@ -121,13 +142,13 @@ export async function processDistributionQueue(): Promise<void> {
       await supabase.from(QUEUE_TABLE).update({ 
         status: "failed", 
         error: "Video file not found",
-        updatedAt: now 
+        updated_at: now 
       }).eq("id", item.id);
       continue;
     }
 
     try {
-      await supabase.from(QUEUE_TABLE).update({ status: "processing", updatedAt: now }).eq("id", item.id);
+      await supabase.from(QUEUE_TABLE).update({ status: "processing", updated_at: now }).eq("id", item.id);
 
       const videoSource = job.videoPath || job.supabaseUrl;
       
@@ -143,16 +164,15 @@ export async function processDistributionQueue(): Promise<void> {
         "default"
       );
 
-      // TS7053 에러 방지를 위해 any 캐스팅 후 인덱싱 - 2026-03-20 build re-trigger
       const result = (results as any)[item.platform];
       const platformError = (errors as any)[item.platform];
 
       if (result) {
         await supabase.from(QUEUE_TABLE).update({ 
           status: "done", 
-          publishedAt: new Date().toISOString(),
+          published_at: new Date().toISOString(),
           metadata: { ...item.metadata, deployedUrl: result.url },
-          updatedAt: new Date().toISOString() 
+          updated_at: new Date().toISOString() 
         }).eq("id", item.id);
       } else {
         throw new Error(platformError || "Deployment failed");
@@ -166,9 +186,9 @@ export async function processDistributionQueue(): Promise<void> {
       await supabase.from(QUEUE_TABLE).update({ 
         status: nextStatus, 
         error: String(err),
-        retryCount,
-        scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-        updatedAt: new Date().toISOString() 
+        retry_count: retryCount,
+        scheduled_at: new Date(Date.now() + 3600000).toISOString(),
+        updated_at: new Date().toISOString() 
       }).eq("id", item.id);
     }
   }

@@ -1,6 +1,7 @@
--- Extended app tables (code expects these when Supabase service_role is configured)
--- Run AFTER: docs/supabase-b2c-migrations.sql, docs/supabase-24-7-migrations.sql,
---            supabase/migrations/20260225120000_shorts_analytics.sql
+-- Extended app tables (code expects these when Supabase service_role is configured).
+-- Tables: b2b_leads, link_clicks (client_ip_hash = SHA-256 hex, never raw IP),
+--   review_analyses, kpi_goals, promotion_plans, channel_profiles_store, shorts_settings_store.
+-- Apply after: 20260225100000_b2c_pillar3, 20260225101000_b2c_24_7, 20260225120000_shorts_analytics.
 -- See docs/SUPABASE_SCHEMA_RUNBOOK.md
 
 -- B2B leads (b2bLeadsService.ts)

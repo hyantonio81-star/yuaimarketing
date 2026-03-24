@@ -22,7 +22,8 @@
     "start": "npm run build && npm run start:server",
     "start:server": "node scripts/start-server.js",
     "check-setup": "node scripts/check-setup.js",
-    "vercel:set-root": "node scripts/vercel-set-root.js"
+    "vercel:set-root": "node scripts/vercel-set-root.js",
+    "supabase:db-push": "node scripts/supabase-db-push.mjs"
   },
   "devDependencies": {
     "@vercel/node": "^3.2.0",
