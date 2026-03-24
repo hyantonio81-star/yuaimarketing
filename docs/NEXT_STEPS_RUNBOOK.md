@@ -2,10 +2,8 @@
 
 ## 1. Supabase SQL (한 번 실행)
 
-1. [Supabase](https://supabase.com) → 프로젝트 → **SQL Editor**
-2. `supabase/migrations/20260225120000_shorts_analytics.sql` 내용 붙여넣기 → **Run**
-
-→ `shorts_stats`, `shorts_jobs` 테이블 생성. Shorts 통계 upsert·job 영속화가 DB와 맞습니다.
+전체 스키마·적용 순서: **[SUPABASE_SCHEMA_RUNBOOK.md](./SUPABASE_SCHEMA_RUNBOOK.md)**  
+(`supabase/migrations/` 4개 파일 또는 `supabase db push`)
 
 ## 2. Vercel 환경 변수
 

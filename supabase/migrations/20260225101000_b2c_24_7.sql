@@ -1,15 +1,12 @@
--- 24/7 B2C 설정·승인대기·루틴 실행 이력 (Supabase)
--- 정본: supabase/migrations/20260225101000_b2c_24_7.sql (CLI db push)
+-- 24/7 B2C 설정·승인대기·루틴 (docs/supabase-24-7-migrations.sql 와 동일)
 
--- 1) B2C AI 자동화 설정 (조직별)
-CREATE TABLE IF NOT EXISTS b2c_settings (
+CREATE TABLE IF NOT EXISTS public.b2c_settings (
   organization_id text PRIMARY KEY DEFAULT 'default',
   ai_automation_enabled boolean NOT NULL DEFAULT false,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 2) B2C 승인 대기 (반자율화: 가격·리뷰·윈백 등)
-CREATE TABLE IF NOT EXISTS b2c_pending_approvals (
+CREATE TABLE IF NOT EXISTS public.b2c_pending_approvals (
   id text PRIMARY KEY,
   organization_id text NOT NULL DEFAULT 'default',
   type text NOT NULL CHECK (type IN ('price_change', 'review_reply', 'winback_send', 'promotion_apply')),
@@ -19,11 +16,10 @@ CREATE TABLE IF NOT EXISTS b2c_pending_approvals (
   resolved_at timestamptz
 );
 
-CREATE INDEX IF NOT EXISTS idx_b2c_pending_org ON b2c_pending_approvals(organization_id);
-CREATE INDEX IF NOT EXISTS idx_b2c_pending_status ON b2c_pending_approvals(organization_id, status);
+CREATE INDEX IF NOT EXISTS idx_b2c_pending_org ON public.b2c_pending_approvals(organization_id);
+CREATE INDEX IF NOT EXISTS idx_b2c_pending_status ON public.b2c_pending_approvals(organization_id, status);
 
--- 3) Nexus 일과 루틴 실행 이력 (Phase 2B)
-CREATE TABLE IF NOT EXISTS nexus_routine_runs (
+CREATE TABLE IF NOT EXISTS public.nexus_routine_runs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   task_time text NOT NULL,
   task_name text NOT NULL,
@@ -34,5 +30,5 @@ CREATE TABLE IF NOT EXISTS nexus_routine_runs (
   details jsonb
 );
 
-CREATE INDEX IF NOT EXISTS idx_nexus_runs_started ON nexus_routine_runs(started_at DESC);
-CREATE INDEX IF NOT EXISTS idx_nexus_runs_task_time ON nexus_routine_runs(task_time, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_nexus_runs_started ON public.nexus_routine_runs(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_nexus_runs_task_time ON public.nexus_routine_runs(task_time, started_at DESC);

@@ -53,7 +53,8 @@
 - 그 외 경로는 그대로 Fastify에 전달 (예: `/api/b2b/options`)
 
 ### Root Directory (프로젝트 설정)
-- **필수**: `Music/Mark01/nexus-ai` (저장소 구조에 맞게 설정됨)
+- **Monorepo가 상위에 있을 때**: 예) `Music/Mark01/nexus-ai` — 저장소 실제 루트에 맞게 Vercel **Root Directory** 설정
+- **저장소 루트가 `nexus-ai`인 경우**: Root Directory 비우거나 `.`
 - 설정 스크립트: `npm run vercel:set-root` (VERCEL_TOKEN 필요)
 
 ### 확인 사항
@@ -68,74 +69,40 @@
 `.github/workflows/ci.yml`
 
 ### 트리거
-- push / pull_request → `main`, `master`
+- push / pull_request → **`main`** (`.github/workflows/ci.yml`)
 
 ### 단계
 1. checkout
-2. Setup Node (`.nvmrc` 기준, npm 캐시)
+2. Setup Node (`.nvmrc`, npm 캐시)
 3. `npm ci`
 4. `npm run lint`
-5. `npm run build`
+5. `npm run test` (backend Vitest)
+6. `npm audit --audit-level=high` (`continue-on-error: true`)
+7. `npm run build` — 빌드 단계에 `VITE_ALLOW_BUILD_WITHOUT_SUPABASE=true`로 CI 안정화; Repository Secrets에 `VITE_SUPABASE_*` 있으면 프로덕션과 동일 키가 주입됨
 
 ### working-directory
-- **현재**: `Music/Mark01/nexus-ai` (저장소 루트가 상위일 때)
-- **단일 프로젝트 루트**인 경우: `ci.yml`에서 `defaults.run.working-directory` 제거하고, `node-version-file`을 `.nvmrc`, `cache-dependency-path`를 `package-lock.json`으로 변경
+- 저장소 루트가 `nexus-ai`이면 `.` (현재 `defaults.run.working-directory: .`)
 
 ### 확인 사항
-- ✅ Vercel 빌드와 동일한 순서 (install → lint → build)
+- install → lint → test → build 순서
 
 ---
 
-## 4. SQL 스키마 (Supabase B2C)
+## 4. SQL 스키마 (Supabase)
 
-### 파일
-`docs/supabase-b2c-migrations.sql`
+### 정본
+- **`docs/SUPABASE_SCHEMA_RUNBOOK.md`** — 적용 순서·CLI·코드 매핑
+- **`supabase/migrations/`** (타임스탬프 순)
+  - `20260225100000_b2c_pillar3.sql` — B2C 연동·재고·경쟁사 가격
+  - `20260225101000_b2c_24_7.sql` — b2c_settings, b2c_pending_approvals, nexus_routine_runs
+  - `20260225120000_shorts_analytics.sql` — shorts_stats, shorts_jobs
+  - `20260225130000_extended_app_tables.sql` — b2b_leads, link_clicks, review_analyses, kpi_goals, promotion_plans, channel_profiles_store, shorts_settings_store
 
-### 테이블
-
-#### b2c_channel_connections
-| 컬럼 | 타입 | 비고 |
-|------|------|------|
-| id | uuid | PK, default gen_random_uuid() |
-| organization_id | text | NOT NULL, default 'default' |
-| channel | text | NOT NULL |
-| store_url | text | |
-| store_name | text | |
-| connected_at | timestamptz | NOT NULL, default now() |
-| UNIQUE | (organization_id, channel) | |
-
-인덱스: `idx_b2c_connections_org` (organization_id)
-
-#### b2c_inventory
-| 컬럼 | 타입 | 비고 |
-|------|------|------|
-| id | uuid | PK |
-| organization_id | text | NOT NULL, default 'default' |
-| country_code | text | |
-| sku | text | NOT NULL |
-| central_quantity | integer | NOT NULL, default 0 |
-| updated_at | timestamptz | NOT NULL, default now() |
-| UNIQUE | (organization_id, country_code, sku) | |
-
-인덱스: `idx_b2c_inventory_org_country` (organization_id, country_code)
-
-#### b2c_competitor_prices (선택)
-| 컬럼 | 타입 |
-|------|------|
-| id | uuid |
-| organization_id | text |
-| channel | text |
-| sku_or_product | text |
-| price | numeric |
-| fetched_at | timestamptz |
-
-### 백엔드 연동
-- `backend/src/lib/b2cDb.ts`에서 `b2c_channel_connections`, `b2c_inventory` 사용
-- 컬럼명·UNIQUE 제약과 코드(upsert onConflict 등) **일치** ✅
+### docs SQL 복사본
+- `docs/supabase-b2c-migrations.sql`, `docs/supabase-24-7-migrations.sql` — SQL Editor 수동 실행용 (정본은 migrations 폴더와 동기)
 
 ### 확인 사항
-- ✅ 스키마와 b2cDb.ts 사용처 일치
-- ✅ Supabase SQL Editor에서 위 마이그레이션 실행 필요 (RLS는 추후 추가 가능)
+- 프로덕션 Supabase에 위 마이그레이션 미적용 시 해당 기능은 파일/인메모리 폴백만 동작할 수 있음
 
 ---
 
@@ -143,7 +110,7 @@
 
 | 항목 | 상태 | 비고 |
 |------|------|------|
-| 서버 | ✅ | Fastify, 라우트/보안 정리됨 |
-| Vercel 파이프라인 | ✅ | vercel.json + api 핸들러, Root Directory 설정됨 |
-| CI | ✅ | main/master, working-directory 반영 (구조에 맞게 조정 가능) |
-| SQL 스키마 | ✅ | B2C 테이블 3개, b2cDb와 일치 |
+| 서버 | ✅ | Fastify, `buildServer` + Vercel inject |
+| Vercel | ✅ | vercel.json, Root Directory는 저장소 구조에 맞게 |
+| CI | ✅ | `main`, lint + test + build, Vite CI 스킵 플래그 |
+| SQL | ✅ | migrations 4종 + RUNBOOK |

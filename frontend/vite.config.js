@@ -7,12 +7,12 @@ export default defineConfig(({ mode }) => {
     const url = (env.VITE_SUPABASE_URL ?? "").trim();
     const key = (env.VITE_SUPABASE_ANON_KEY ?? "").trim();
     const allowSkip = env.VITE_ALLOW_BUILD_WITHOUT_SUPABASE === "true";
-    const ok =
+    const hasRealKeys =
       url.length > 0 &&
       key.length > 0 &&
       !url.includes("your-project-ref") &&
       key !== "your-anon-key";
-    if (!ok && !allowSkip) {
+    if (!hasRealKeys && !allowSkip) {
       throw new Error(
         "[YuantO Ai] 프로덕션 빌드에 Supabase 프론트 변수가 없습니다.\n" +
           "Vercel → Project → Settings → Environment Variables 에 다음을 추가하세요:\n" +

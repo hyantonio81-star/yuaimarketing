@@ -1,5 +1,6 @@
 -- B2C Pillar 3: 재고·연동 영속화 (Supabase)
--- Run in Supabase SQL Editor. RLS can be added later per organization_id.
+-- 정본: supabase/migrations/20260225100000_b2c_pillar3.sql (CLI db push)
+-- 이 파일은 SQL Editor 수동 실행용 복사본입니다.
 
 -- 1) 이커머스 채널 연동 (조직별)
 CREATE TABLE IF NOT EXISTS b2c_channel_connections (

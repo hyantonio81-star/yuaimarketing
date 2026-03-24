@@ -3,6 +3,7 @@
  * 목적지 URL 변경 시 이 설정만 수정하면 됨 (포스트/광고 URL 고정).
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,12 +45,16 @@ export async function goRedirectRoutes(app: FastifyInstance) {
     // 클릭 추적 (비동기, 리다이렉트 방해 금지) - 2026-03-20 build re-trigger
     const supabase = getSupabaseAdmin();
     if (supabase) {
+      const rawIp = (request.ip || "").trim();
+      const client_ip_hash = rawIp
+        ? createHash("sha256").update(rawIp, "utf8").digest("hex")
+        : null;
       supabase.from("link_clicks").insert({
         link_id: id,
         target_url: url,
-        referrer: request.headers.referer || null,
-        user_agent: request.headers["user-agent"] || null,
-        ip_hash: request.ip // 개인정보보호를 위해 IP 전체 저장보다는 해싱 권장되나 일단 기록
+        referrer: (request.headers.referer as string) || null,
+        user_agent: (request.headers["user-agent"] as string) || null,
+        client_ip_hash,
       }).then(({ error }: { error: any }) => {
         if (error) app.log.warn(`Click tracking error for ${id}: ${error.message}`);
       });
