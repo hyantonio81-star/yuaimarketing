@@ -464,7 +464,8 @@ export const translations = {
       registerError: "가입에 실패했습니다.",
       secureConnection: "보안 연결(HTTPS)으로 로그인됩니다.",
       useHttps: "보안을 위해 HTTPS로 접속해 주세요.",
-      supabaseNotConfigured: "Supabase가 설정되지 않았습니다. .env에 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY를 넣으면 로그인이 가능합니다.",
+      supabaseNotConfigured:
+        "Supabase가 설정되지 않았습니다. 로컬: frontend/.env에 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY 추가. Vercel 배포: Project → Settings → Environment Variables에 위 두 이름으로 Supabase(프로젝트 설정 → API)의 Project URL·anon public key를 넣고 Redeploy 하세요.",
       devSkipLogin: "개발: 로그인 없이 진행",
     },
     market: {
@@ -1895,7 +1896,8 @@ export const translations = {
       registerError: "Registration failed.",
       secureConnection: "You are signing in over a secure connection (HTTPS).",
       useHttps: "For security, please use HTTPS.",
-      supabaseNotConfigured: "Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env to enable sign-in.",
+      supabaseNotConfigured:
+        "Supabase is not configured. Local: add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to frontend/.env. Vercel: add the same variable names in Project → Settings → Environment Variables (use Supabase Dashboard → API: Project URL + anon key), then Redeploy.",
       devSkipLogin: "Dev: Continue without signing in",
     },
     market: {
@@ -3324,7 +3326,8 @@ export const translations = {
       registerError: "Error en el registro.",
       secureConnection: "Inicias sesión mediante conexión segura (HTTPS).",
       useHttps: "Por seguridad, usa HTTPS.",
-      supabaseNotConfigured: "Supabase no está configurado. Añade VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env para habilitar el inicio de sesión.",
+      supabaseNotConfigured:
+        "Supabase no está configurado. Local: añade VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en frontend/.env. Vercel: mismas variables en Environment Variables (URL del proyecto + clave anon de Supabase) y Redeploy.",
       devSkipLogin: "Desarrollo: Continuar sin iniciar sesión",
     },
     market: {
