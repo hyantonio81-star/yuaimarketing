@@ -1,0 +1,53 @@
+{
+  "id": "/",
+  "name": "Yuanto Check - QSE · ISO",
+  "short_name": "Yuanto",
+  "description": "Sistema integrado QSE, Documentos, Ranking. Smart Checklist, Reservas, Organización.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#312e81",
+  "theme_color": "#4338ca",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Checklist",
+      "short_name": "Checklist",
+      "url": "/mobile/smart",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Inspeccion MAQ",
+      "short_name": "MAQ",
+      "url": "/mobile/inspeccion-maq",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Inspeccion Caja",
+      "short_name": "Caja",
+      "url": "/mobile/inspeccion-caja",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"]
+}

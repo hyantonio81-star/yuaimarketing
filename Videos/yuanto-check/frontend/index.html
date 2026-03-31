@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#4338ca" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Yuanto" />
+    <title>유안토(Yuanto) 통합 경영 마스터 시스템 | QSE · ISO 9001 · 14001 · 522-06</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180.png" />
+  </head>
+  <body style="background:#f1f5f9;margin:0;min-height:100vh;">
+    <!-- React가 마운트되면 #root가 교체됩니다. 계속 "Cargando"면 main.jsx가 실행되지 않은 것입니다. -->
+    <div id="root">
+      <div data-yuanto-boot style="padding:2rem;max-width:36rem;margin:0 auto;text-align:center;color:#64748b;font-family:system-ui,sans-serif;">
+        <p style="font-size:1.125rem;margin:0 0 0.5rem;">Cargando...</p>
+        <p style="font-size:0.8125rem;opacity:0.85;line-height:1.5;margin:0;">
+          Abra la app con la URL que muestra la terminal de Vite (p. ej. <code style="background:#e2e8f0;padding:0.1em 0.35em;border-radius:4px;">http://localhost:3080</code>
+          u <code style="background:#e2e8f0;padding:0.1em 0.35em;border-radius:4px;">http://localhost:3082</code> si 3080 está ocupado).
+          No abra el archivo HTML desde el Explorador (file://).
+        </p>
+      </div>
+    </div>
+    <script>
+      (function () {
+        /* file:// 이면 ES 모듈이 절대로 안 돌아가 브라우저를 바꿔도 동일합니다 */
+        if (location.protocol === 'file:') {
+          var r = document.getElementById('root');
+          if (r) {
+            r.innerHTML =
+              '<div style="padding:2rem;max-width:34rem;margin:2rem auto;font-family:system-ui,sans-serif;line-height:1.55">' +
+              '<h1 style="color:#b91c1c;font-size:1.25rem;margin:0 0 1rem;">잘못된 열기 방식 (file://)</h1>' +
+              '<p style="color:#334155;margin:0 0 0.75rem;">지금 주소가 <code style="background:#e2e8f0;padding:0.15em 0.4em;border-radius:4px;">file:///...</code> 입니다. HTML을 더블클릭해서 연 상태입니다. 브라우저를 바꿔도 해결되지 않습니다.</p>' +
+              '<p style="color:#334155;margin:0 0 0.75rem;"><strong>해야 할 일:</strong> 프로젝트 폴더에서 <code style="background:#e2e8f0;">npm run dev --prefix frontend</code> 실행 후, 터미널에 나온 <strong>Local: http://localhost:????</strong> 주소를 주소창에 그대로 입력하세요.</p>' +
+              '<p style="color:#64748b;font-size:0.875rem;margin:0;">O ejecute <code style="background:#e2e8f0;">START_YUANTO.bat</code> y use la URL que muestre Vite.</p>' +
+              '</div>';
+          }
+          window.__YUANTO_BLOCK_SPA__ = true;
+        }
+      })();
+    </script>
+    <script type="module">
+      function yuantoShowLoadError(title, detail) {
+        var root = document.getElementById('root');
+        if (!root) return;
+        var boot = root.querySelector('[data-yuanto-boot]');
+        var safe = String(detail || '').replace(/</g, '&lt;').replace(/&/g, '&amp;');
+        var block =
+          '<p style="color:#b91c1c;font-weight:700;margin:0 0 0.5rem;">' + title + '</p>' +
+          '<pre style="text-align:left;background:#e2e8f0;padding:12px;border-radius:8px;overflow:auto;font-size:12px;max-height:12rem">' +
+          safe +
+          '</pre>' +
+          '<p style="font-size:0.8125rem;line-height:1.5;margin:0.75rem 0 0;color:#475569;">' +
+          'Vite가 켜진 터미널의 <strong>Local</strong> 주소와 브라우저 주소가 같은지 확인하세요. ' +
+          '다른 프로그램이 같은 포트에서 정적 파일만 주면 <code>/src/main.jsx</code>가 404가 됩니다.' +
+          '</p>';
+        if (boot) boot.innerHTML = block;
+        else root.innerHTML = '<div data-yuanto-boot style="padding:2rem;max-width:40rem;margin:0 auto;font-family:system-ui,sans-serif">' + block + '</div>';
+      }
+      if (window.__YUANTO_BLOCK_SPA__) {
+        /* file:// — ya hay mensaje */
+      } else {
+        import('/src/main.jsx').catch(function (err) {
+          var msg = err && err.message ? err.message : String(err);
+          yuantoShowLoadError('main.jsx를 불러오지 못했습니다 / Error loading app', msg);
+          console.error('[Yuanto]', err);
+        });
+      }
+    </script>
+    <script>
+      (function () {
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e && e.target;
+            if (!t || t.tagName !== 'SCRIPT') return;
+            var src = t.src || '';
+            if (src.indexOf('main.jsx') === -1 && src.indexOf('main.') === -1) return;
+            var root = document.getElementById('root');
+            var boot = root && root.querySelector('[data-yuanto-boot]');
+            if (!boot) return;
+            boot.innerHTML =
+              '<p style="color:#b91c1c;font-weight:700;margin:0 0 0.5rem;">No se cargó el script de la app</p>' +
+              '<p style="font-size:0.875rem;line-height:1.5;margin:0 0 0.5rem;">¿Usa la URL y el puerto exactos de la ventana <strong>npm run dev</strong>? (3080, 3081, 3082…)</p>' +
+              '<p style="font-size:0.8rem;color:#64748b;margin:0;">F12 → Red / Network → recargue: <code>main.jsx</code> debe ser estado 200.</p>';
+          },
+          true
+        );
+        window.addEventListener('unhandledrejection', function (e) {
+          var reason = e && e.reason;
+          var msg = reason && reason.message ? reason.message : String(reason || '');
+          if (msg.indexOf('main.jsx') === -1 && msg.indexOf('import') === -1 && msg.indexOf('Failed to fetch') === -1) return;
+          var root = document.getElementById('root');
+          var boot = root && root.querySelector('[data-yuanto-boot]');
+          if (!boot) return;
+          boot.innerHTML =
+            '<p style="color:#b91c1c;font-weight:700;margin:0 0 0.5rem;">Error al iniciar (Promise)</p>' +
+            '<pre style="text-align:left;background:#e2e8f0;padding:12px;font-size:12px;overflow:auto">' +
+            String(msg).replace(/</g, '&lt;') +
+            '</pre>';
+        });
+        var ms = 10000;
+        setTimeout(function () {
+          if (location.protocol === 'file:') return;
+          var root = document.getElementById('root');
+          var boot = root && root.querySelector('[data-yuanto-boot]');
+          if (!boot) return;
+          boot.innerHTML =
+            '<p style="color:#b91c1c;font-weight:700;margin:0 0 0.75rem;font-size:1.05rem;">No se pudo iniciar la aplicación</p>' +
+            '<p style="font-size:0.875rem;line-height:1.55;margin:0 0 0.75rem;">1) En la carpeta del proyecto: <code style="background:#e2e8f0;padding:0.15em 0.4em;border-radius:4px;">npm run dev --prefix frontend</code><br/>2) Copie la URL <strong>Local:</strong> de esa ventana (no adivine el puerto).<br/>3) F12 → Consola: si hay errores rojos, envíelos para revisar.</p>' +
+            '<p style="font-size:0.8rem;opacity:0.9;margin:0;">한국어: 터미널에 나온 Local 주소(3080·3082 등)와 브라우저 주소가 <strong>완전히 같아야</strong> 합니다.</p>';
+        }, ms);
+      })();
+    </script>
+  </body>
+</html>
