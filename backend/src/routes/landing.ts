@@ -7,6 +7,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { getLocalDataDir } from "../lib/localDataDir.js";
 
 interface ContactBody {
   inquiryType?: string;
@@ -26,7 +27,7 @@ interface NewsletterEntry {
   created_at: string;
 }
 
-const NEWSLETTER_PATH = join(process.cwd(), "data", "landing-newsletter.json");
+const NEWSLETTER_PATH = join(getLocalDataDir(), "landing-newsletter.json");
 
 async function loadNewsletterEntries(): Promise<NewsletterEntry[]> {
   try {

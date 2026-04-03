@@ -1,14 +1,13 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { createReadStream, existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { requireUser } from "../lib/auth.js";
+import { timingSafeEqual } from "node:crypto";
+import { join } from "node:path";
+import { requireUser, getAuthUserFromRequest } from "../lib/auth.js";
 import { checkRateLimitApi } from "../lib/rateLimit.js";
+import { getLocalDataDir } from "../lib/localDataDir.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, "..", "..", "data");
-const ACCOUNT_REQUESTS_PATH = join(DATA_DIR, "account-requests.json");
+const ACCOUNT_REQUESTS_PATH = join(getLocalDataDir(), "account-requests.json");
 import {
   collectTrendTopics,
   runPipelineOnce,
@@ -25,12 +24,14 @@ import {
 import {
   addToDistributionQueue,
   getDistributionQueue,
+  processDistributionQueue,
 } from "../services/shortsDistributionService.js";
 import { isExpired } from "../services/shortsStorage.js";
 import { DEPLOY_PLATFORMS } from "../services/shorts/shortsDeployAgent.js";
 import {
   getAuthUrl,
   exchangeCodeAndStore,
+  verifyYoutubeOAuthState,
   getConnectionStatus,
   disconnect as youtubeDisconnect,
   listAccounts,
@@ -54,12 +55,74 @@ function isYoutubeCallback(request: FastifyRequest): boolean {
   return request.method === "GET" && (request.url?.split("?")[0]?.endsWith("/youtube/callback") === true);
 }
 
+/**
+ * OAuth 완료 후 브라우저를 보낼 SPA origin.
+ * 우선순위: FRONTEND_ORIGIN → Vercel 프록시 헤더 → 안전한 Referer → 로컬 기본.
+ * (Google 리다이렉트 시 Referer가 google.com일 수 있어 그 경우는 무시)
+ */
+function resolveFrontendOrigin(request: FastifyRequest): string {
+  const fromEnv = (process.env.FRONTEND_ORIGIN ?? "").trim().replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+
+  const xfHost = (request.headers["x-forwarded-host"] as string | undefined)?.split(",")[0]?.trim();
+  const xfProto =
+    (request.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() || "https";
+  if (xfHost && !/^127\.0\.0\.1(?::\d+)?$/i.test(xfHost)) {
+    return `${xfProto}://${xfHost}`;
+  }
+
+  const host = (request.headers.host as string | undefined)?.split(",")[0]?.trim();
+  if (host && !/^127\.0\.0\.1:\d+$/.test(host) && !/^localhost:\d+$/.test(host)) {
+    const proto = host.startsWith("localhost") ? "http" : xfProto || "https";
+    return `${proto}://${host}`;
+  }
+
+  const referer = request.headers.referer;
+  if (referer) {
+    try {
+      const u = new URL(referer);
+      const h = u.hostname;
+      if (h === "localhost" || h === "127.0.0.1" || h.endsWith(".vercel.app")) {
+        return u.origin;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return "http://localhost:5173";
+}
+
 export async function shortsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", async (request: FastifyRequest, reply: FastifyReply) => {
     if (isYoutubeCallback(request)) return;
+
+    const workerSecret = process.env.SHORTS_WORKER_SECRET ?? "";
+    const workerSecretHeader = request.headers["x-shorts-worker-secret"];
+    const providedSecret =
+      (typeof workerSecretHeader === "string" ? workerSecretHeader : Array.isArray(workerSecretHeader) ? workerSecretHeader[0] : undefined)?.trim() ?? "";
+
+    const isQueueWorkerEndpoint =
+      request.method === "POST" && request.url?.startsWith("/distribution/queue/process");
+
+    const MAX_SECRET_LEN = 200;
+    const secretsMatch = (() => {
+      if (!workerSecret || !providedSecret) return false;
+      if (workerSecret.length > MAX_SECRET_LEN) return false;
+      if (providedSecret.length > MAX_SECRET_LEN) return false;
+      if (providedSecret.length !== workerSecret.length) return false;
+      return timingSafeEqual(Buffer.from(providedSecret, "utf8"), Buffer.from(workerSecret, "utf8"));
+    })();
+
+    const isQueueWorker = isQueueWorkerEndpoint && secretsMatch;
+
+    if (isQueueWorker) {
+      return;
+    }
+
     const user = await requireUser(request, reply);
     if (!user) return;
-    await ensureYoutubeStoreLoaded();
+    await ensureYoutubeStoreLoaded(user.id);
     if (!checkRateLimitApi(request)) {
       reply.code(429).send({ error: "Too Many Requests", message: "Rate limit exceeded." });
       return;
@@ -83,23 +146,29 @@ export async function shortsRoutes(app: FastifyInstance) {
   /** 배포 가능 플랫폼 목록 */
   app.get("/platforms", async () => ({ platforms: DEPLOY_PLATFORMS }));
 
-  /** Shorts 시스템 헬스체크 (FFmpeg 등) */
+  /** Shorts 시스템 헬스체크 (FFmpeg 등). Vercel은 /var/task 에 바이너리 설치 불가 → 프론트에서 별도 안내 */
   app.get("/health", async () => {
+    const onVercel = process.env.VERCEL === "1";
+    if (onVercel) {
+      return { ffmpegInstalled: false, deployTarget: "vercel" as const };
+    }
     const ffmpegInstalled = await checkFfmpegInstalled();
-    return { ffmpegInstalled };
+    return { ffmpegInstalled, deployTarget: "standard" as const };
   });
 
   /** YouTube 연동 계정 목록 (최대 5개) */
-  app.get("/youtube/accounts", async () => {
-    const accounts = listAccounts();
-    const suggestedNextKey = suggestNextKey();
+  app.get("/youtube/accounts", async (request: FastifyRequest) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+    const accounts = await listAccounts(uid);
+    const suggestedNextKey = await suggestNextKey(uid);
     return { accounts, suggestedNextKey, maxAccounts: MAX_YT_ACCOUNTS };
   });
 
   /** YouTube 연동: 인증 URL. query.key가 있으면 해당 key로 연동 (새 계정 추가 시 사용) */
   app.get<{ Querystring: { state?: string; key?: string } }>("/youtube/auth-url", async (request: FastifyRequest<{ Querystring: { state?: string; key?: string } }>) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
     const key = request.query?.key?.trim() || request.query?.state?.trim();
-    const result = getAuthUrl(key || undefined);
+    const result = getAuthUrl(key || undefined, uid);
     if (!result) return { url: null, error: "YOUTUBE_CLIENT_ID not set" };
     return { url: result.url, state: result.state };
   });
@@ -107,14 +176,23 @@ export async function shortsRoutes(app: FastifyInstance) {
   /** YouTube 연동: code 교환 (callback). state에 key 포함. 성공 시 프론트 /shorts?youtube=connected 로 리다이렉트 */
   app.get<{ Querystring: { code?: string; state?: string } }>("/youtube/callback", async (request: FastifyRequest<{ Querystring: { code?: string; state?: string } }>, reply: FastifyReply) => {
     const code = request.query?.code?.trim();
-    const stateKey = (request.query?.state ?? "").trim() || "default";
-    const frontendOrigin = (process.env.FRONTEND_ORIGIN ?? "http://localhost:5173").trim();
-    const redirectTo = `${frontendOrigin}/shorts?youtube=connected`;
+    const stateRaw = (request.query?.state ?? "").trim() || "default";
+    const frontendOrigin = resolveFrontendOrigin(request);
     const redirectConnections = `${frontendOrigin}/settings/connections?youtube=connected`;
     if (!code) {
       return reply.redirect(`${frontendOrigin}/shorts?youtube=error&message=code_required`, 302);
     }
-    const result = await exchangeCodeAndStore(code, stateKey);
+
+    const verified = verifyYoutubeOAuthState(stateRaw);
+    if (!verified) {
+      return reply.redirect(
+        `${frontendOrigin}/settings/connections?youtube=error&message=${encodeURIComponent("invalid_oauth_state")}`,
+        302
+      );
+    }
+
+    const stateKey = verified.key;
+    const result = await exchangeCodeAndStore(code, stateKey, verified.userId);
     if (!result.ok) {
       return reply.redirect(`${frontendOrigin}/settings/connections?youtube=error&message=${encodeURIComponent(result.error ?? "exchange_failed")}`, 302);
     }
@@ -123,22 +201,25 @@ export async function shortsRoutes(app: FastifyInstance) {
 
   /** YouTube 연동 상태 (query.key 없으면 default) */
   app.get<{ Querystring: { key?: string } }>("/youtube/status", async (request: FastifyRequest<{ Querystring: { key?: string } }>) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
     const key = request.query?.key?.trim() || "default";
-    return getConnectionStatus(key);
+    return getConnectionStatus(key, uid);
   });
 
   /** YouTube 연동 해제. body.key 지정 시 해당 계정만 해제 */
   app.post<{ Body: { key?: string } }>("/youtube/disconnect", async (request: FastifyRequest<{ Body: { key?: string } }>) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
     const key = (request.body as { key?: string } | undefined)?.key?.trim() || "default";
-    youtubeDisconnect(key);
+    await youtubeDisconnect(key, uid);
     return { ok: true };
   });
 
   /** YouTube 계정 라벨 수정 */
   app.put<{ Params: { key: string }; Body: { label?: string } }>("/youtube/accounts/:key", async (request: FastifyRequest<{ Params: { key: string }; Body: { label?: string } }>) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
     const key = request.params?.key ?? "";
     const label = (request.body as { label?: string } | undefined)?.label?.trim() ?? "";
-    setAccountLabel(key, label);
+    await setAccountLabel(key, label, uid);
     return { ok: true };
   });
 
@@ -249,6 +330,8 @@ export async function shortsRoutes(app: FastifyInstance) {
   app.post<{
     Body: {
       keywords?: string[];
+      /** 업로드·채널 기본값에 사용할 YouTube 계정 키 (다중 계정) */
+      youtubeKey?: string;
       avatarPresetId?: string;
       enableTts?: boolean;
       noBgm?: boolean;
@@ -271,9 +354,12 @@ export async function shortsRoutes(app: FastifyInstance) {
     const body = request.body ?? {};
     const keywords = Array.isArray(body.keywords) ? body.keywords.filter(Boolean) : [];
     const platforms = Array.isArray(body.platforms) ? body.platforms.filter((p): p is "youtube" | "tiktok" | "instagram" | "facebook" => ["youtube", "tiktok", "instagram", "facebook"].includes(p)) : undefined;
+    const youtubeKey = (body.youtubeKey ?? "default").toString().trim() || "default";
+    const ownerUserId = (await getAuthUserFromRequest(request))?.id ?? "";
     const job = await runPipelineOnce(keywords, {
+      ownerUserId: ownerUserId || undefined,
       avatarPresetId: body.avatarPresetId ?? undefined,
-      youtubeKey: "default",
+      youtubeKey,
       enableTts: body.enableTts !== false,
       noBgm: body.noBgm === true,
       voiceGender: body.voiceGender,
@@ -356,7 +442,8 @@ export async function shortsRoutes(app: FastifyInstance) {
     const youtubeKey = body.youtubeKey ?? "default";
     const platforms = Array.isArray(body.platforms) ? body.platforms.filter((p): p is "youtube" | "tiktok" | "instagram" | "facebook" => ["youtube", "tiktok", "instagram", "facebook"].includes(p)) : undefined;
     try {
-      const job = await uploadJob(jobId, youtubeKey, platforms);
+      const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+      const job = await uploadJob(jobId, youtubeKey, platforms, uid);
       return job;
     } catch (e) {
       return reply.code(400).send({ error: e instanceof Error ? e.message : "Upload failed" });
@@ -389,5 +476,14 @@ export async function shortsRoutes(app: FastifyInstance) {
   app.get("/distribution/queue", async () => {
     const queue = await getDistributionQueue();
     return { queue };
+  });
+
+  /** 배포 대기열 워커 1회 실행 (Cron/VM용). X-Shorts-Worker-Secret 필요 */
+  app.post<{
+    Body: { limit?: number };
+  }>("/distribution/queue/process", async (request: FastifyRequest<{ Body: { limit?: number } }>) => {
+    const limit = request.body?.limit;
+    const result = await processDistributionQueue({ limit: typeof limit === "number" ? limit : undefined });
+    return { ok: true, ...result };
   });
 }

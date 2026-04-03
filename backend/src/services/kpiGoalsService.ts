@@ -6,6 +6,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { getSupabaseAdmin } from "../lib/supabaseServer.js";
+import { getLocalDataDir } from "../lib/localDataDir.js";
 
 export type KpiCategory = "financial" | "customer" | "process" | "learning";
 
@@ -23,7 +24,7 @@ const FILENAME = "kpi-goals.json";
 const DEFAULT_ORG = "default";
 
 function getDataPath(): string {
-  return join(process.cwd(), "data", FILENAME);
+  return join(getLocalDataDir(), FILENAME);
 }
 
 function orgKey(orgId?: string): string {

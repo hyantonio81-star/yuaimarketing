@@ -1,18 +1,76 @@
 /**
  * YouTube 계정 연동 및 업로드
- * OAuth 2.0: 인증 URL 발급, code → refresh_token 저장, 업로드 시 access_token 사용
- * env: YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REDIRECT_URI (optional)
- * env: YOUTUBE_TOKEN_ENCRYPTION_KEY (64자 hex, 선택) 설정 시 data/youtube-tokens.enc 에 암호화 저장·재시작 후 복원
+ * OAuth 2.0: 인증 URL, code → refresh_token 저장(Supabase 사용자별), 업로드 시 access_token
+ * env: YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REDIRECT_URI
+ * env: YOUTUBE_TOKEN_ENCRYPTION_KEY — 레거시 단일 파일 암호화(선택). Supabase 우선.
  */
 
-import { createCipheriv, createDecipheriv, randomBytes, createHash } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes, createHash, createHmac } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { getLocalDataDir } from "../lib/localDataDir.js";
+import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 
 const SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.force-ssl"];
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos";
+const OAUTH_STATE_PREFIX = "v1";
+
+/** OAuth state에 userId 없을 때(레거시) DB·파일 공용 행 */
+export const YOUTUBE_LEGACY_USER_SENTINEL = "00000000-0000-0000-0000-000000000001";
+
+const YOUTUBE_OAUTH_TABLE = "youtube_oauth_store";
+
+function getOAuthStateSecret(): string {
+  return (process.env.YOUTUBE_OAUTH_STATE_SECRET ?? process.env.CONNECTION_PIN_SECRET ?? "").trim();
+}
+
+/**
+ * OAuth state 서명: v1:userId:accountKey:nonce:sig (userId = Supabase auth user uuid)
+ * 레거시 4자리: v1:accountKey:nonce:sig → userId는 sentinel으로 처리
+ */
+export function signYoutubeOAuthState(accountKey: string = "default", userId: string): string {
+  const secret = getOAuthStateSecret();
+  const k = (accountKey ?? "").trim() || "default";
+  const uid = (userId ?? "").trim() || YOUTUBE_LEGACY_USER_SENTINEL;
+  if (!secret) return k;
+
+  const nonce = randomBytes(16).toString("hex");
+  const payload = `${uid}.${k}.${nonce}`;
+  const sig = createHmac("sha256", secret).update(payload, "utf8").digest("hex");
+  return `${OAUTH_STATE_PREFIX}:${uid}:${k}:${nonce}:${sig}`;
+}
+
+export function verifyYoutubeOAuthState(state: string): { userId: string; key: string; nonce?: string } | null {
+  const secret = getOAuthStateSecret();
+  const raw = (state ?? "").trim();
+  if (!raw) return { userId: YOUTUBE_LEGACY_USER_SENTINEL, key: "default" };
+
+  if (!secret) {
+    return { userId: YOUTUBE_LEGACY_USER_SENTINEL, key: raw || "default" };
+  }
+
+  if (!raw.startsWith(`${OAUTH_STATE_PREFIX}:`)) return null;
+  const parts = raw.split(":");
+  if (parts.length === 5) {
+    const [, userId, key, nonce, sig] = parts;
+    if (!userId || !key || !nonce || !sig) return null;
+    const payload = `${userId}.${key}.${nonce}`;
+    const expected = createHmac("sha256", secret).update(payload, "utf8").digest("hex");
+    if (expected !== sig) return null;
+    return { userId, key, nonce };
+  }
+  if (parts.length === 4) {
+    const [, key, nonce, sig] = parts;
+    if (!key || !nonce || !sig) return null;
+    const payload = `${key}.${nonce}`;
+    const expected = createHmac("sha256", secret).update(payload, "utf8").digest("hex");
+    if (expected !== sig) return null;
+    return { userId: YOUTUBE_LEGACY_USER_SENTINEL, key, nonce };
+  }
+  return null;
+}
 
 interface StoredTokens {
   refresh_token: string;
@@ -20,21 +78,79 @@ interface StoredTokens {
   expiry_ms?: number;
 }
 
-/** 영속화용: refresh_token만 저장 (access_token·expiry는 휘발성) */
 interface PersistedTokens {
   refresh_token: string;
 }
 
-const tokenStore = new Map<string, StoredTokens>();
-const labelStore = new Map<string, string>();
+type UserYoutubeStore = {
+  tokens: Map<string, StoredTokens>;
+  labels: Map<string, string>;
+  hydrated: boolean;
+};
+
+const stores = new Map<string, UserYoutubeStore>();
+const hydrateLocks = new Map<string, Promise<void>>();
+
+function normalizeUserId(userId: string | undefined): string {
+  const u = (userId ?? "").trim();
+  return u || YOUTUBE_LEGACY_USER_SENTINEL;
+}
+
+function getOrCreateEmptyStore(): UserYoutubeStore {
+  return {
+    tokens: new Map(),
+    labels: new Map(),
+    hydrated: false,
+  };
+}
+
+async function loadFromSupabase(userId: string, into: UserYoutubeStore): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return;
+  const { data, error } = await supabase
+    .from(YOUTUBE_OAUTH_TABLE)
+    .select("tokens, labels")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !data) return;
+  const tok = data.tokens as Record<string, { refresh_token?: string }> | null;
+  const lab = data.labels as Record<string, string> | null;
+  if (tok && typeof tok === "object") {
+    for (const [k, v] of Object.entries(tok)) {
+      if (v?.refresh_token) into.tokens.set(k, { refresh_token: v.refresh_token });
+    }
+  }
+  if (lab && typeof lab === "object") {
+    for (const [k, v] of Object.entries(lab)) {
+      if (typeof v === "string") into.labels.set(k, v);
+    }
+  }
+}
+
+async function saveToSupabase(userId: string, store: UserYoutubeStore): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return;
+  const tokens: Record<string, PersistedTokens> = {};
+  for (const [k, v] of store.tokens) {
+    tokens[k] = { refresh_token: v.refresh_token };
+  }
+  const labels: Record<string, string> = {};
+  for (const [k, v] of store.labels) {
+    labels[k] = v;
+  }
+  const now = new Date().toISOString();
+  await supabase.from(YOUTUBE_OAUTH_TABLE).upsert(
+    { user_id: userId, tokens, labels, updated_at: now },
+    { onConflict: "user_id" }
+  );
+}
 
 const TOKENS_FILENAME = "youtube-tokens.enc";
 
 function getTokensPath(): string {
-  return join(process.cwd(), "data", TOKENS_FILENAME);
+  return join(getLocalDataDir(), TOKENS_FILENAME);
 }
 
-/** YOUTUBE_TOKEN_ENCRYPTION_KEY: 64자 hex → 32 bytes. 미설정 시 null (영속화 비사용) */
 function getEncryptionKey(): Buffer | null {
   const raw = (process.env.YOUTUBE_TOKEN_ENCRYPTION_KEY ?? "").trim();
   if (raw.length === 64 && /^[0-9a-fA-F]+$/.test(raw)) {
@@ -69,7 +185,8 @@ function decrypt(hexPayload: string, key: Buffer): string | null {
   }
 }
 
-async function loadFromFile(): Promise<void> {
+/** 레거시: 암호화 파일은 sentinel 행과 병합 (단일 테넌트 마이그레이션) */
+async function loadLegacyEncryptedFile(into: UserYoutubeStore): Promise<void> {
   const key = getEncryptionKey();
   if (!key) return;
   const path = getTokensPath();
@@ -81,28 +198,28 @@ async function loadFromFile(): Promise<void> {
     const data = JSON.parse(plain) as { tokens?: Record<string, PersistedTokens>; labels?: Record<string, string> };
     if (data.tokens && typeof data.tokens === "object") {
       for (const [k, v] of Object.entries(data.tokens)) {
-        if (v?.refresh_token) tokenStore.set(k, { refresh_token: v.refresh_token });
+        if (v?.refresh_token && !into.tokens.has(k)) into.tokens.set(k, { refresh_token: v.refresh_token });
       }
     }
     if (data.labels && typeof data.labels === "object") {
       for (const [k, v] of Object.entries(data.labels)) {
-        if (typeof v === "string") labelStore.set(k, v);
+        if (typeof v === "string" && !into.labels.has(k)) into.labels.set(k, v);
       }
     }
   } catch {
-    // ignore
+    /* ignore */
   }
 }
 
-async function saveToFile(): Promise<void> {
+async function saveLegacyEncryptedFile(store: UserYoutubeStore): Promise<void> {
   const key = getEncryptionKey();
   if (!key) return;
   const tokens: Record<string, PersistedTokens> = {};
-  for (const [k, v] of tokenStore) {
+  for (const [k, v] of store.tokens) {
     tokens[k] = { refresh_token: v.refresh_token };
   }
   const labels: Record<string, string> = {};
-  for (const [k, v] of labelStore) {
+  for (const [k, v] of store.labels) {
     labels[k] = v;
   }
   const plain = JSON.stringify({ tokens, labels });
@@ -116,17 +233,45 @@ async function saveToFile(): Promise<void> {
   await writeFile(path, hex, "utf-8");
 }
 
-/** 서버 기동 시 암호화된 파일에서 복원. YOUTUBE_TOKEN_ENCRYPTION_KEY 설정 시에만 동작 */
-let loaded = false;
-async function ensureLoaded(): Promise<void> {
-  if (loaded) return;
-  await loadFromFile();
-  loaded = true;
+async function hydrateStore(userId: string, store: UserYoutubeStore): Promise<void> {
+  await loadFromSupabase(userId, store);
+  if (userId === YOUTUBE_LEGACY_USER_SENTINEL) {
+    await loadLegacyEncryptedFile(store);
+  }
+  store.hydrated = true;
 }
 
-/** Shorts 라우트에서 첫 요청 시 한 번 호출하면 토큰/라벨 복원됨 */
-export async function ensureYoutubeStoreLoaded(): Promise<void> {
-  await ensureLoaded();
+export async function getYoutubeStore(userId: string): Promise<UserYoutubeStore> {
+  const id = normalizeUserId(userId);
+  let store = stores.get(id);
+  if (!store) {
+    store = getOrCreateEmptyStore();
+    stores.set(id, store);
+  }
+  if (store.hydrated) return store;
+
+  const existingLock = hydrateLocks.get(id);
+  if (existingLock) {
+    await existingLock;
+    return stores.get(id)!;
+  }
+
+  const lock = (async () => {
+    const s = stores.get(id)!;
+    if (!s.hydrated) await hydrateStore(id, s);
+  })();
+  hydrateLocks.set(id, lock);
+  try {
+    await lock;
+  } finally {
+    hydrateLocks.delete(id);
+  }
+  return stores.get(id)!;
+}
+
+/** 라우트 preHandler에서 호출: 해당 사용자 스토어 선로딩 */
+export async function ensureYoutubeStoreLoaded(userId: string): Promise<void> {
+  await getYoutubeStore(userId);
 }
 
 export const MAX_YT_ACCOUNTS = 5;
@@ -145,11 +290,13 @@ function getRedirectUri(): string {
   return redirectUri;
 }
 
-/** OAuth 인증 URL. state에 key를 넣어 callback에서 사용 (key = 계정 식별자, 예: default, yt_2) */
-export function getAuthUrl(key?: string): { url: string; state: string } | null {
+/** OAuth 인증 URL */
+export function getAuthUrl(accountKey: string | undefined, userId: string): { url: string; state: string } | null {
   const clientId = getClientId();
   if (!clientId) return null;
-  const s = (key ?? "default").trim() || "default";
+  const k = (accountKey ?? "default").trim() || "default";
+  const uid = normalizeUserId(userId);
+  const signedState = signYoutubeOAuthState(k, uid);
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: getRedirectUri(),
@@ -157,13 +304,16 @@ export function getAuthUrl(key?: string): { url: string; state: string } | null 
     scope: SCOPES.join(" "),
     access_type: "offline",
     prompt: "consent",
-    state: s,
+    state: signedState,
   });
-  return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`, state: s };
+  return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`, state: signedState };
 }
 
-/** code로 토큰 교환 후 저장 (key = "default" 또는 userId) */
-export async function exchangeCodeAndStore(code: string, key: string = "default"): Promise<{ ok: boolean; error?: string }> {
+export async function exchangeCodeAndStore(
+  code: string,
+  accountKey: string = "default",
+  userId: string
+): Promise<{ ok: boolean; error?: string }> {
   const clientId = getClientId();
   const clientSecret = getClientSecret();
   if (!clientId || !clientSecret) return { ok: false, error: "YOUTUBE_CLIENT_ID or YOUTUBE_CLIENT_SECRET not set" };
@@ -183,18 +333,22 @@ export async function exchangeCodeAndStore(code: string, key: string = "default"
   if (!res.ok) return { ok: false, error: data.error_description || data.error || "Token exchange failed" };
   const refresh = data.refresh_token;
   if (!refresh) return { ok: false, error: "No refresh_token in response" };
-  const k = (key ?? "default").trim() || "default";
-  tokenStore.set(k, {
+  const k = (accountKey ?? "default").trim() || "default";
+  const id = normalizeUserId(userId);
+  const store = await getYoutubeStore(id);
+  store.tokens.set(k, {
     refresh_token: refresh,
     access_token: data.access_token,
     expiry_ms: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
   });
-  await saveToFile();
+  await saveToSupabase(id, store);
+  await saveLegacyEncryptedFile(store).catch(() => {});
   return { ok: true };
 }
 
-async function getAccessToken(key: string = "default"): Promise<string | null> {
-  const stored = tokenStore.get(key);
+async function getAccessTokenForUser(key: string, userId: string): Promise<string | null> {
+  const store = await getYoutubeStore(normalizeUserId(userId));
+  const stored = store.tokens.get((key ?? "default").trim() || "default");
   if (!stored) return null;
   if (stored.access_token && stored.expiry_ms && stored.expiry_ms > Date.now() + 60000) {
     return stored.access_token;
@@ -214,64 +368,72 @@ async function getAccessToken(key: string = "default"): Promise<string | null> {
   if (!res.ok) return null;
   stored.access_token = data.access_token;
   stored.expiry_ms = data.expires_in ? Date.now() + data.expires_in * 1000 : undefined;
+  await saveToSupabase(normalizeUserId(userId), store);
   return stored.access_token ?? null;
 }
 
-/** 연동 상태 */
-export function getConnectionStatus(key: string = "default"): { connected: boolean } {
-  return { connected: tokenStore.has(key) };
-}
-
-/** 연동 해제 */
-export function disconnect(key: string = "default"): void {
+export async function getConnectionStatus(
+  key: string = "default",
+  userId: string
+): Promise<{ connected: boolean }> {
+  const store = await getYoutubeStore(normalizeUserId(userId));
   const k = (key ?? "default").trim() || "default";
-  tokenStore.delete(k);
-  labelStore.delete(k);
-  saveToFile().catch(() => {});
+  return { connected: store.tokens.has(k) };
 }
 
-/** 연동된 계정 목록 (key, label, connected) */
-export function listAccounts(): { key: string; label: string; connected: boolean }[] {
-  return Array.from(tokenStore.keys()).map((key) => ({
+export async function disconnect(key: string = "default", userId: string): Promise<void> {
+  const id = normalizeUserId(userId);
+  const store = await getYoutubeStore(id);
+  const k = (key ?? "default").trim() || "default";
+  store.tokens.delete(k);
+  store.labels.delete(k);
+  await saveToSupabase(id, store);
+  await saveLegacyEncryptedFile(store).catch(() => {});
+}
+
+export async function listAccounts(userId: string): Promise<{ key: string; label: string; connected: boolean }[]> {
+  const store = await getYoutubeStore(normalizeUserId(userId));
+  return Array.from(store.tokens.keys()).map((key) => ({
     key,
-    label: labelStore.get(key) ?? key,
+    label: store.labels.get(key) ?? key,
     connected: true,
   }));
 }
 
-/** 다음 추가 시 사용할 권장 key (최대 개수 미만일 때만) */
-export function suggestNextKey(): string | null {
-  if (tokenStore.size >= MAX_YT_ACCOUNTS) return null;
-  if (!tokenStore.has("default")) return "default";
+export async function suggestNextKey(userId: string): Promise<string | null> {
+  const store = await getYoutubeStore(normalizeUserId(userId));
+  if (store.tokens.size >= MAX_YT_ACCOUNTS) return null;
+  if (!store.tokens.has("default")) return "default";
   for (let i = 1; i <= MAX_YT_ACCOUNTS; i++) {
     const k = `yt_${i}`;
-    if (!tokenStore.has(k)) return k;
+    if (!store.tokens.has(k)) return k;
   }
   return null;
 }
 
-export function setAccountLabel(key: string, label: string): void {
+export async function setAccountLabel(key: string, label: string, userId: string): Promise<void> {
   const k = (key ?? "").trim();
   if (!k) return;
-  if (label.trim()) labelStore.set(k, label.trim());
-  else labelStore.delete(k);
-  saveToFile().catch(() => {});
+  const id = normalizeUserId(userId);
+  const store = await getYoutubeStore(id);
+  if (label.trim()) store.labels.set(k, label.trim());
+  else store.labels.delete(k);
+  await saveToSupabase(id, store);
+  await saveLegacyEncryptedFile(store).catch(() => {});
 }
 
-export function getAccountLabel(key: string): string | undefined {
-  return labelStore.get((key ?? "").trim());
+export async function getAccountLabel(key: string, userId: string): Promise<string | undefined> {
+  const store = await getYoutubeStore(normalizeUserId(userId));
+  return store.labels.get((key ?? "").trim());
 }
 
-/**
- * YouTube에 Shorts 업로드 (실제 파일이 있을 때만 성공)
- * videoPath: 로컬 mp4 경로. 스텁이거나 파일 없으면 실패 반환.
- */
 export async function uploadVideo(
   videoPath: string,
   meta: { title: string; description?: string },
-  key: string = "default"
+  key: string = "default",
+  userId: string
 ): Promise<{ videoId: string; url: string } | { error: string }> {
-  const accessToken = await getAccessToken(key);
+  const accessToken = await getAccessTokenForUser(key, userId);
   if (!accessToken) return { error: "YouTube account not connected or token expired" };
 
   const fs = await import("fs").then((m) => m.promises).catch(() => null);

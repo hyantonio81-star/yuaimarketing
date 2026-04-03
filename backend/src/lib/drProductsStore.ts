@@ -2,7 +2,9 @@
  * dr-products.json 공유 스토어. 랜딩 Tienda 및 콘텐츠 자동화 파이프라인 연동용.
  */
 import { readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { getLocalDataDir } from "./localDataDir.js";
 import type { CommerceProduct } from "../services/threadsCommerce/types.js";
 
 export interface DrProduct {
@@ -25,7 +27,7 @@ export interface DrProduct {
   updated_at: string;
 }
 
-const DATA_PATH = join(process.cwd(), "data", "dr-products.json");
+const DATA_PATH = join(getLocalDataDir(), "dr-products.json");
 
 export async function loadProducts(): Promise<DrProduct[]> {
   try {
@@ -38,6 +40,11 @@ export async function loadProducts(): Promise<DrProduct[]> {
 }
 
 export async function saveProducts(products: DrProduct[]): Promise<void> {
+  const dir = join(DATA_PATH, "..");
+  if (!existsSync(dir)) {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(dir, { recursive: true });
+  }
   await writeFile(DATA_PATH, JSON.stringify(products, null, 2), "utf-8");
 }
 

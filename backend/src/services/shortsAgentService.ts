@@ -156,12 +156,15 @@ export async function assembleVideo(
 export async function uploadToYouTube(
   videoPath: string,
   meta: { title: string; description?: string },
-  youtubeKey: string = "default"
+  youtubeKey: string = "default",
+  ownerUserId: string = ""
 ) {
-  return deployToYouTube(videoPath, meta, youtubeKey);
+  return deployToYouTube(videoPath, meta, youtubeKey, ownerUserId);
 }
 
 export interface RunPipelineOptions {
+  /** Supabase auth user id (YouTube OAuth·업로드 시 필수 권장) */
+  ownerUserId?: string;
   avatarPresetId?: string;
   youtubeKey?: string;
   enableTts?: boolean;
@@ -198,6 +201,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
   await ensureJobsLoaded();
   const defaults = options?.youtubeKey ? await getChannelDefaults(options.youtubeKey) : null;
   const {
+    ownerUserId: ownerUserIdOpt,
     avatarPresetId,
     youtubeKey = "default",
     enableTts = true,
@@ -225,6 +229,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
 
   const uploadMode = uploadModeOpt ?? (defaults?.autoUpload === false ? "review_first" : "immediate");
   const merged = {
+    ownerUserId: ownerUserIdOpt,
     avatarPresetId,
     youtubeKey,
     enableTts,
@@ -257,6 +262,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     status: "pending",
     createdAt: now,
     updatedAt: now,
+    ...(ownerUserIdOpt ? { ownerUserId: ownerUserIdOpt } : {}),
   };
   JOBS.set(jobId, job);
   await persistJobs();
@@ -393,7 +399,8 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
       videoMeta.videoPath,
       meta,
       merged.platforms,
-      merged.youtubeKey
+      merged.youtubeKey,
+      merged.ownerUserId
     );
     const deployedUrls: Record<string, string> = {};
     for (const [platform, r] of Object.entries(results ?? {})) {
@@ -442,7 +449,8 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
 export async function uploadJob(
   jobId: string,
   youtubeKey: string = "default",
-  platforms: DeployPlatform[] = ["youtube"]
+  platforms: DeployPlatform[] = ["youtube"],
+  actingUserId: string = ""
 ): Promise<ShortsPipelineJob> {
   await ensureJobsLoaded();
   const job = JOBS.get(jobId);
@@ -455,7 +463,8 @@ export async function uploadJob(
     description: job.script.hook + "\n\n" + job.script.scenes.map((s) => s.text).join("\n"),
   };
   const list: DeployPlatform[] = platforms?.length ? platforms : ["youtube"];
-  const { results } = await deployToPlatforms(job.videoPath, meta, list, youtubeKey);
+  const ownerUserId = actingUserId.trim() || job.ownerUserId || "";
+  const { results } = await deployToPlatforms(job.videoPath, meta, list, youtubeKey, ownerUserId);
   const deployedUrls: Record<string, string> = {};
   for (const [platform, r] of Object.entries(results ?? {})) {
     if (r?.url) deployedUrls[platform] = r.url;

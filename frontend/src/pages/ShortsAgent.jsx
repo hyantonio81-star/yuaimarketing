@@ -21,7 +21,7 @@ export default function ShortsAgent() {
   };
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("generate"); // 'generate' | 'studio' | 'queue'
-  const [selectedJobIds, setSelectedSelectedJobIds] = useState([]);
+  const [selectedJobIds, setSelectedJobIds] = useState([]);
   const [queue, setQueue] = useState([]);
   const [queueLoading, setQueueLoading] = useState(false);
   
@@ -30,16 +30,16 @@ export default function ShortsAgent() {
   const [isDistributing, setIsDistributing] = useState(false);
 
   const toggleJobSelection = (jobId) => {
-    setSelectedSelectedJobIds(prev => 
-      prev.includes(jobId) ? prev.filter(id => id !== jobId) : [...prev, jobId]
+    setSelectedJobIds((prev) =>
+      prev.includes(jobId) ? prev.filter((id) => id !== jobId) : [...prev, jobId]
     );
   };
 
   const selectAllJobs = (jobList) => {
     if (selectedJobIds.length === jobList.length) {
-      setSelectedSelectedJobIds([]);
+      setSelectedJobIds([]);
     } else {
-      setSelectedSelectedJobIds(jobList.map(j => j.jobId));
+      setSelectedJobIds(jobList.map((j) => j.jobId));
     }
   };
 
@@ -48,7 +48,7 @@ export default function ShortsAgent() {
     setIsDistributing(true);
     try {
       await shortsApi.addToDistributionQueue(selectedJobIds, distPlatforms);
-      setSelectedSelectedJobIds([]);
+      setSelectedJobIds([]);
       loadJobs();
       loadQueue();
       alert(t("shortsAgent.alertQueueAdded", { count: selectedJobIds.length }));
@@ -108,6 +108,8 @@ export default function ShortsAgent() {
   const [contentLanguage, setContentLanguage] = useState("ko");
   const [videoUrls, setVideoUrls] = useState({});
   const [ffmpegInstalled, setFfmpegInstalled] = useState(true);
+  const [deployTarget, setDeployTarget] = useState("standard");
+  const [workflowOpen, setWorkflowOpen] = useState(false);
 
   const ensureVideoUrl = (jobId) => {
     if (!jobId || videoUrls[jobId]) return;
@@ -320,6 +322,7 @@ export default function ShortsAgent() {
       const runFormat = format === "shorts_20" ? "shorts" : format;
       const runTargetSec = format === "shorts_20" ? 20 : (format === "long" ? targetDurationSeconds : undefined);
       const data = await shortsApi.runPipeline(keywordList.length ? keywordList : undefined, {
+        youtubeKey: selectedYoutubeKey || "default",
         avatarPresetId: avatarPresetId || undefined,
         enableTts,
         noBgm,
@@ -349,7 +352,7 @@ export default function ShortsAgent() {
   };
 
   const handleConnectYoutube = () => {
-    shortsApi.getYoutubeAuthUrl().then((d) => {
+    shortsApi.getYoutubeAuthUrl(selectedYoutubeKey || undefined).then((d) => {
       if (d?.url) {
         window.location.href = d.url;
       } else {
@@ -366,7 +369,7 @@ export default function ShortsAgent() {
     });
   };
   const handleDisconnectYoutube = () => {
-    shortsApi.disconnectYoutube().then(() => setYoutubeStatus({ connected: false }));
+    shortsApi.disconnectYoutube(selectedYoutubeKey || undefined).then(() => setYoutubeStatus({ connected: false }));
   };
 
   const handleLoadDefaults = () => {
@@ -437,6 +440,29 @@ export default function ShortsAgent() {
           <p className="text-muted-foreground mt-1">
             {t("shortsAgent.pageSubtitle")}
           </p>
+          <div className="mt-4 rounded-lg border border-border bg-muted/20">
+            <button
+              type="button"
+              onClick={() => setWorkflowOpen((o) => !o)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-muted/40 touch-manipulation"
+            >
+              <span>{t("shortsAgent.workflowTitle")}</span>
+              {workflowOpen ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+            </button>
+            {workflowOpen && (
+              <div className="space-y-2 border-t border-border px-3 py-3 text-xs text-muted-foreground leading-relaxed">
+                <p>{t("shortsAgent.workflowIntro")}</p>
+                <ol className="list-decimal space-y-1.5 pl-4">
+                  <li>{t("shortsAgent.workflowStep1")}</li>
+                  <li>{t("shortsAgent.workflowStep2")}</li>
+                  <li>{t("shortsAgent.workflowStep3")}</li>
+                  <li>{t("shortsAgent.workflowStep4")}</li>
+                  <li>{t("shortsAgent.workflowStep5")}</li>
+                </ol>
+                <p className="pt-1 text-[11px] border-t border-border/60">{t("shortsAgent.workflowIntegrations")}</p>
+              </div>
+            )}
+          </div>
         </div>
         
         <div className="flex bg-muted/50 p-1 rounded-xl border border-border self-start">
@@ -470,17 +496,29 @@ export default function ShortsAgent() {
       {activeTab === "generate" && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           {youtubeAccounts.length === 0 && (
-            <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
-              <span>{t("shortsAgent.youtubeNotConnectedBanner")}</span>
-              <Link to="/settings/connections" className="inline-flex items-center gap-1 font-medium text-amber-700 dark:text-amber-300 hover:underline">
-                <ExternalLink className="w-4 h-4" />
-                {t("shortsAgent.setupGuideLink")}
-              </Link>
+            <div className="mb-6 space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+              <div className="flex flex-wrap items-center gap-2">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <span>{t("shortsAgent.youtubeNotConnectedBanner")}</span>
+                <Link to="/settings/connections" className="inline-flex items-center gap-1 font-medium text-amber-700 dark:text-amber-300 hover:underline">
+                  <ExternalLink className="w-4 h-4" />
+                  {t("shortsAgent.setupGuideLink")}
+                </Link>
+              </div>
+              {deployTarget === "vercel" && (
+                <p className="text-xs text-amber-900/80 dark:text-amber-100/90 pl-7">{t("shortsAgent.youtubeVercelEphemeralHint")}</p>
+              )}
             </div>
           )}
 
-          {!ffmpegInstalled && (
+          {!ffmpegInstalled && deployTarget === "vercel" && (
+            <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <span>{t("shortsAgent.ffmpegVercelNotice")}</span>
+            </div>
+          )}
+
+          {!ffmpegInstalled && deployTarget !== "vercel" && (
             <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive dark:text-red-400">
               <AlertTriangle className="w-5 h-5 shrink-0" />
               <span>{t("shortsAgent.ffmpegNotInstalled")}</span>
@@ -1259,7 +1297,7 @@ export default function ShortsAgent() {
             </button>
             
             <button 
-              onClick={() => setSelectedSelectedJobIds([])}
+              onClick={() => setSelectedJobIds([])}
               className="text-xs text-white/60 hover:text-white"
             >
               {t("common.cancel")}

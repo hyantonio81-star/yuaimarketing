@@ -13,6 +13,8 @@ export function isRequireLoginEnabled() {
 
 export function getDevSkipLogin() {
   if (typeof window === "undefined") return false;
+  // dev_skip_login bypass는 개발 환경에서만 허용합니다.
+  if (!import.meta.env.DEV) return false;
   try {
     return window.sessionStorage.getItem(DEV_SKIP_LOGIN_KEY) === "1";
   } catch {
@@ -22,6 +24,8 @@ export function getDevSkipLogin() {
 
 export function setDevSkipLogin(value) {
   try {
+    // dev_skip_login bypass는 개발 환경에서만 허용합니다.
+    if (!import.meta.env.DEV) return;
     if (value) window.sessionStorage.setItem(DEV_SKIP_LOGIN_KEY, "1");
     else window.sessionStorage.removeItem(DEV_SKIP_LOGIN_KEY);
   } catch {}

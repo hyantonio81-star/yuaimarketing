@@ -20,6 +20,7 @@ import { fetchProductsByMarketplace } from "../threadsCommerce/threadsCommerceSe
 import { buildAffiliateProductUrl, type AffiliateConfig } from "../threadsCommerce/affiliateUrl.js";
 import type { MarketplaceId } from "../threadsCommerce/types.js";
 import { appendFromCommerce } from "../../lib/drProductsStore.js";
+import { getLocalDataDir } from "../../lib/localDataDir.js";
 
 const defaultSettings: ContentAutomationSettings = {
   enableBlog: false,
@@ -35,7 +36,7 @@ const defaultSettings: ContentAutomationSettings = {
 const SETTINGS_FILENAME = "content-automation-settings.json";
 
 function getSettingsPath(): string {
-  return join(process.cwd(), "data", SETTINGS_FILENAME);
+  return join(getLocalDataDir(), SETTINGS_FILENAME);
 }
 
 const settingsStore = new Map<string, ContentAutomationSettings>();

@@ -37,11 +37,27 @@ const fastify = Fastify({
 });
 
 async function buildServer() {
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.trim();
-  const allowedOriginList = allowedOrigins
-    ? allowedOrigins.split(",").map((o) => o.trim()).filter(Boolean)
-    : [];
+  const allowedOriginsRaw = process.env.ALLOWED_ORIGINS?.trim();
+  const frontendOrigin = process.env.FRONTEND_ORIGIN?.trim();
+  const landingOrigin = process.env.LANDING_ORIGIN?.trim();
+
+  const allowedOriginList = allowedOriginsRaw
+    ? allowedOriginsRaw.split(",").map((o) => o.trim()).filter(Boolean)
+    : frontendOrigin
+      ? [frontendOrigin].filter(Boolean)
+      : [];
+
+  if (!frontendOrigin && landingOrigin) {
+    // Only landing origin was provided.
+    // Keep allowedOriginList minimal; expand via ALLOWED_ORIGINS in production.
+    allowedOriginList.push(landingOrigin);
+  }
+
   if (allowedOriginList.length === 0) {
+    const isProd = process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
+    if (isProd) {
+      throw new Error("CORS origin configuration missing: set ALLOWED_ORIGINS or FRONTEND_ORIGIN (and optionally LANDING_ORIGIN).");
+    }
     fastify.log.warn("ALLOWED_ORIGINS is empty. CORS is disabled until explicit origins are configured.");
   }
   await fastify.register(cors, {

@@ -7,13 +7,11 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { getAuthUserFromRequest } from "../lib/auth.js";
+import { getLocalDataDir } from "../lib/localDataDir.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, "..", "..", "data");
-const CONNECTION_PINS_PATH = join(DATA_DIR, "connection-pins.json");
+const CONNECTION_PINS_PATH = join(getLocalDataDir(), "connection-pins.json");
 const SECRET = (process.env.CONNECTION_PIN_SECRET ?? "dev-secret-keep-it-safe").trim();
 
 function hashPin(userId: string, pin: string): string {

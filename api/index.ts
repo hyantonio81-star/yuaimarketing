@@ -15,51 +15,52 @@ async function getApp() {
   return buildServer();
 }
 
-function normalizeUrl(req: { url?: string; headers?: Record<string, string | string[] | undefined> }): string {
-  const raw =
-    req.url ||
-    (typeof req.headers?.["x-invoke-path"] === "string" ? req.headers["x-invoke-path"] : null) ||
-    (typeof req.headers?.["x-url"] === "string" ? req.headers["x-url"] : null);
-  if (!raw || typeof raw !== "string") return "/api/health";
-  let path = raw.trim();
-  try {
-    if (path.startsWith("http")) path = new URL(path).pathname;
-    else if (!path.startsWith("/")) path = path.startsWith("api") ? `/${path}` : `/api/${path}`;
-  } catch {
-    path = path.startsWith("/") ? path : `/api/${path}`;
-  }
-  return path === "/api/health" ? "/health" : path;
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const url = normalizeUrl(req);
-  if (url === "/health") {
-    try {
-      if (!appPromise) appPromise = getApp();
-      const app = await appPromise;
-      const response = await app.inject({ method: "GET", url: "/health" });
-      res.status(response.statusCode).setHeader("Content-Type", "application/json").send(response.payload ?? "{}");
-      return;
-    } catch {
-      res.status(503).json({ status: "unavailable", service: "yuanto-ai-backend", error: "Backend not built or failed to load" });
-      return;
+  const pathParam = req.query?.path;
+  const pathStr = Array.isArray(pathParam) ? pathParam.join("/") : pathParam ?? "";
+
+  const normalized = String(pathStr).trim().replace(/^\/+/, "");
+  const basePath = normalized ? `/api/${normalized}` : "/api";
+
+  // path를 제외한 나머지 query를 유지하여 OAuth callback(code/state) 등
+  // 라우트 파라미터가 유실되지 않도록 합니다.
+  const queryParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(req.query ?? {})) {
+    if (key === "path") continue;
+    if (Array.isArray(value)) {
+      for (const v of value) queryParams.append(key, String(v));
+      continue;
     }
+    if (value != null) queryParams.append(key, String(value));
   }
+  const qs = queryParams.toString();
+  const targetUrl = qs ? `${basePath}?${qs}` : basePath;
+
+  // Ensure /api/health works even when rewrites route it here.
+  if (normalized === "health") {
+    res.setHeader("Content-Type", "application/json");
+    res.status(200).end(JSON.stringify({ status: "ok", service: "yuaimarketing-api", source: "api/index.ts" }));
+    return;
+  }
+
   try {
     if (!appPromise) appPromise = getApp();
     const app = await appPromise;
+
     const payload =
       req.method !== "GET" && req.method !== "HEAD" && req.body != null
         ? typeof req.body === "string"
           ? req.body
           : JSON.stringify(req.body)
         : undefined;
+
     const response = await app.inject({
       method: req.method || "GET",
-      url,
+      url: targetUrl,
       headers: (req.headers as Record<string, string>) || {},
       payload,
     });
+
     res.status(response.statusCode);
     const headers = response.headers as Record<string, string | string[] | undefined>;
     if (headers && typeof headers === "object") {
@@ -69,10 +70,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     res.send(response.payload ?? "");
   } catch (err) {
-    console.error("[api handler]", err);
+    console.error("[api/index handler]", err);
     res.status(500).json({
       error: "Internal Server Error",
       message: err instanceof Error ? err.message : String(err),
     });
   }
 }
+

@@ -13,3 +13,7 @@ yarn.lock
 /.idea
 /.turbo
 /.cache
+.vercel
+
+# 로컬 Shorts job 큐 스냅샷(런타임 변동 — 커밋 제외)
+backend/data/shorts_jobs.json

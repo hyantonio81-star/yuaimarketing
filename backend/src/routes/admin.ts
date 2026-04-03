@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { requireAdmin } from "../lib/auth.js";
 import { getSupabaseAdmin } from "../lib/supabaseServer.js";
+import { checkFfmpegInstalled } from "../services/shorts/shortsHealthService.js";
 
 /** 프로덕션(Vercel 또는 NODE_ENV=production)에서는 기본 비활성화. 첫 admin 생성 후 반드시 ADMIN_BOOTSTRAP_ENABLED=false 권장 */
 const isProduction = process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
@@ -36,6 +37,90 @@ export async function adminRoutes(app: FastifyInstance) {
       req.log.error(err);
       return reply.code(500).send({ error: "Internal Server Error" });
     }
+  });
+
+  /**
+   * Readiness check for operations.
+   * - Verifies Supabase configuration + critical table access
+   * - Verifies server FFmpeg presence
+   * - Useful for runbooks and smoke checks
+   */
+  app.get("/readiness", async (req: FastifyRequest, reply: FastifyReply) => {
+    const adminUser = await requireAdmin(req, reply);
+    if (!adminUser) return;
+
+    const now = new Date().toISOString();
+    const supabase = getSupabaseAdmin();
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+    const anonKey = process.env.SUPABASE_ANON_KEY ?? "";
+    const isServiceRoleValid =
+      serviceRoleKey.trim().length > 0 &&
+      !serviceRoleKey.startsWith("sb_secret_") &&
+      serviceRoleKey.includes(".");
+
+    const supabaseConfigured = !!process.env.SUPABASE_URL?.trim() && !!(isServiceRoleValid || anonKey.trim().length > 0);
+
+    const checks: Array<{ table: string; column: string }> = [
+      // Shorts stats & jobs
+      { table: "shorts_stats", column: "job_id" },
+      { table: "shorts_jobs", column: "id" },
+      { table: "shorts_distribution_queue", column: "id" },
+
+      // Extended app state used across modules
+      { table: "b2b_leads", column: "id" },
+      { table: "link_clicks", column: "id" },
+      { table: "review_analyses", column: "id" },
+      { table: "kpi_goals", column: "organization_id" },
+      { table: "promotion_plans", column: "id" },
+      { table: "channel_profiles_store", column: "id" },
+      { table: "shorts_settings_store", column: "id" },
+
+      // B2C / core
+      { table: "b2c_channel_connections", column: "id" },
+      { table: "b2c_inventory", column: "id" },
+      { table: "b2c_competitor_prices", column: "id" },
+      { table: "b2c_settings", column: "organization_id" },
+      { table: "b2c_pending_approvals", column: "id" },
+      { table: "nexus_routine_runs", column: "id" },
+    ];
+
+    const results: Record<string, { ok: boolean; error?: string }> = {};
+
+    const checkTable = async (table: string, column: string) => {
+      if (!supabase) return { ok: false, error: "supabase_not_configured" };
+      const { data, error } = await supabase
+        .from(table)
+        .select(column)
+        .limit(1);
+      if (error) return { ok: false, error: error.message };
+      if (!data) return { ok: false, error: "empty_response" };
+      return { ok: true };
+    };
+
+    const tablesOk: boolean[] = [];
+    for (const c of checks) {
+      const r = await checkTable(c.table, c.column);
+      results[c.table] = r;
+      tablesOk.push(r.ok);
+    }
+
+    const isServerlessRuntime = process.env.VERCEL === "1";
+    const ffmpegInstalled = isServerlessRuntime ? true : await checkFfmpegInstalled();
+    const ready = supabaseConfigured && tablesOk.every(Boolean) && ffmpegInstalled;
+
+    reply.code(ready ? 200 : 503).send({
+      status: ready ? "ok" : "not_ready",
+      checkedAt: now,
+      supabase: {
+        configured: supabaseConfigured,
+        serviceRoleValid: isServiceRoleValid,
+        using: isServiceRoleValid ? "service_role" : "anon_key_fallback",
+      },
+      ffmpegInstalled,
+      ffmpegCheckSkipped: isServerlessRuntime,
+      tables: results,
+    });
   });
 
   /**

@@ -8,6 +8,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { getSupabaseAdmin } from "../lib/supabaseServer.js";
+import { getLocalDataDir } from "../lib/localDataDir.js";
 
 export type ChannelTheme =
   | "health"
@@ -37,7 +38,7 @@ export interface ChannelProfile {
 const FILENAME = "channel-profiles.json";
 
 function getDataPath(): string {
-  return join(process.cwd(), "data", FILENAME);
+  return join(getLocalDataDir(), FILENAME);
 }
 
 type Store = Record<string, ChannelProfile>;

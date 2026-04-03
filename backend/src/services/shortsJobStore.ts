@@ -7,14 +7,15 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ShortsPipelineJob } from "./shorts/shortsTypes.js";
 import { getSupabaseAdmin } from "../lib/supabaseServer.js";
+import { getLocalDataDir } from "../lib/localDataDir.js";
 
 const DEFAULT_JOBS_FILE = "shorts_jobs.json";
 
 function getJobsPath(): string {
-  const dataDir = process.env.SHORTS_JOBS_FILE
-    ? join(process.cwd(), process.env.SHORTS_JOBS_FILE)
-    : join(process.cwd(), "data", DEFAULT_JOBS_FILE);
-  return dataDir;
+  if (process.env.SHORTS_JOBS_FILE) {
+    return join(process.cwd(), process.env.SHORTS_JOBS_FILE);
+  }
+  return join(getLocalDataDir(), DEFAULT_JOBS_FILE);
 }
 
 /** 파일에서 job 목록 로드 (폴백용) */
@@ -34,6 +35,9 @@ async function loadJobsFromFileFallback(): Promise<ShortsPipelineJob[]> {
 /** job 목록 로드 (Supabase 우선) */
 export async function loadJobsFromFile(): Promise<ShortsPipelineJob[]> {
   const supabase = getSupabaseAdmin();
+  const allowFileFallback =
+    process.env.SHORTS_JOB_FILE_FALLBACK === "true" || process.env.NODE_ENV !== "production";
+
   if (supabase) {
     const { data, error } = await supabase
       .from("shorts_jobs")
@@ -45,8 +49,15 @@ export async function loadJobsFromFile(): Promise<ShortsPipelineJob[]> {
     if (!error && data && Array.isArray(data.jobs)) {
       return data.jobs as ShortsPipelineJob[];
     }
+
+    if (error && !allowFileFallback) {
+      throw new Error(`[shorts_jobs] Supabase load failed (file fallback disabled): ${error.message}`);
+    }
   }
-  return loadJobsFromFileFallback();
+
+  // Supabase가 없거나(오프라인) 또는 운영 폴백 허용 케이스에만 파일에서 복원
+  if (allowFileFallback) return loadJobsFromFileFallback();
+  return [];
 }
 
 /** job 목록 저장 (Supabase 및 파일 폴백) */

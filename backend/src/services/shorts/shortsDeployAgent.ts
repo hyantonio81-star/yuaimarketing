@@ -20,11 +20,12 @@ export interface DeployResult {
 export async function deployToYouTube(
   videoPath: string,
   meta: DeployMeta,
-  youtubeKey: string = "default"
+  youtubeKey: string = "default",
+  ownerUserId: string = ""
 ): Promise<DeployResult> {
-  const { connected } = getYoutubeConnectionStatus(youtubeKey);
+  const { connected } = await getYoutubeConnectionStatus(youtubeKey, ownerUserId);
   if (connected) {
-    const result = await youtubeUploadVideo(videoPath, meta, youtubeKey);
+    const result = await youtubeUploadVideo(videoPath, meta, youtubeKey, ownerUserId);
     if ("error" in result) throw new Error(result.error);
     return { videoId: result.videoId, url: result.url };
   }
@@ -62,7 +63,8 @@ export async function deployToPlatforms(
   videoPath: string,
   meta: DeployMeta,
   platforms: DeployPlatform[],
-  youtubeKey: string = "default"
+  youtubeKey: string = "default",
+  ownerUserId: string = ""
 ): Promise<DeployToPlatformsResult> {
   const results: Partial<Record<DeployPlatform, DeployResult>> = {};
   const errors: Partial<Record<DeployPlatform, string>> = {};
@@ -86,7 +88,7 @@ export async function deployToPlatforms(
       };
 
       if (platform === "youtube") {
-        results.youtube = await deployToYouTube(videoPath, platformMeta, youtubeKey);
+        results.youtube = await deployToYouTube(videoPath, platformMeta, youtubeKey, ownerUserId);
       } else if (platform === "tiktok") {
         results.tiktok = await deployToTikTok(videoPath, platformMeta);
       } else if (platform === "instagram") {

@@ -8,6 +8,7 @@ import { mkdir, copyFile, rm, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { getSupabaseAdmin } from "../lib/supabaseServer.js";
+import { getLocalDataDir } from "../lib/localDataDir.js";
 
 const DEFAULT_SUBDIR = "shorts";
 const SUPABASE_BUCKET = "shorts-videos";
@@ -15,8 +16,7 @@ const SUPABASE_BUCKET = "shorts-videos";
 function getStorageRoot(): string {
   const root = (process.env.SHORTS_STORAGE_PATH ?? "").trim();
   if (root) return root;
-  const fromCwd = join(process.cwd(), "data", DEFAULT_SUBDIR);
-  return fromCwd;
+  return join(getLocalDataDir(), DEFAULT_SUBDIR);
 }
 
 /** Supabase Storage에 파일 업로드 및 Public URL 반환 */

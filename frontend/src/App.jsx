@@ -20,11 +20,13 @@ import SettingsConnections from "./pages/SettingsConnections";
 import Admin from "./pages/Admin";
 import AdminGuard from "./components/AdminGuard";
 import Setup from "./pages/Setup";
+import ResetPassword from "./pages/ResetPassword";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/setup" element={<Setup />} />
       <Route path="/register" element={<Register />} />
       <Route path="/links" element={<Links />} />

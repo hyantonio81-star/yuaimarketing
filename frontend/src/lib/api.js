@@ -250,6 +250,7 @@ export const shortsApi = {
   runPipeline: (keywords, options) =>
     api.post("/shorts/run", {
       keywords: keywords ?? [],
+      youtubeKey: options?.youtubeKey,
       avatarPresetId: options?.avatarPresetId,
       enableTts: options?.enableTts,
       noBgm: options?.noBgm,

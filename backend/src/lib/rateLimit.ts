@@ -2,20 +2,57 @@
  * In-memory rate limiter for AI and auth-sensitive endpoints.
  * Production: consider Redis or @fastify/rate-limit with store.
  */
+import { createHash } from "node:crypto";
+
 const store = new Map<string, { count: number; resetAt: number }>();
 
 const WINDOW_MS = 60 * 1000; // 1 min
 const MAX_PER_WINDOW = 30;   // per key (AI)
 const MAX_API_PER_WINDOW = 120; // per key (B2B/B2C 등 일반 API)
 const MAX_LOGIN_PER_WINDOW = 5; // per key (Tienda Admin 로그인 시도)
+const MAX_ENTRIES = 50_000; // safety cap for serverless/in-memory deployments
+
+function cleanupExpired(now: number): void {
+  for (const [key, entry] of store.entries()) {
+    if (now > entry.resetAt) store.delete(key);
+  }
+}
+
+function pruneIfNeeded(now: number): void {
+  if (store.size <= MAX_ENTRIES) return;
+  cleanupExpired(now);
+  if (store.size <= MAX_ENTRIES) return;
+
+  const entries = Array.from(store.entries()).sort((a, b) => a[1].resetAt - b[1].resetAt);
+  const toDelete = store.size - MAX_ENTRIES;
+  for (let i = 0; i < toDelete; i++) store.delete(entries[i][0]);
+}
 
 function getKey(req: { ip?: string; headers?: Record<string, string | string[] | undefined> }): string {
-  return req.ip ?? "anonymous";
+  const ip = req.ip ?? "anonymous";
+  const authHeader = req.headers?.authorization;
+  const authStr = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+
+  if (typeof authStr === "string") {
+    const trimmed = authStr.trim();
+    if (trimmed.length > 0) {
+      const tokenLike = trimmed.toLowerCase().startsWith("bearer ") ? trimmed.slice(7).trim() : trimmed;
+      const tokenHash = createHash("sha256").update(tokenLike, "utf8").digest("hex");
+      // 토큰 원문은 저장하지 않고 해시만 키에 반영합니다.
+      return `${ip}:auth:${tokenHash}`;
+    }
+  }
+
+  return `${ip}:noauth`;
 }
 
 function checkLimit(req: { ip?: string; headers?: Record<string, string | string[] | undefined> }, keyPrefix: string, maxPerWindow: number): boolean {
   const key = `${keyPrefix}:${getKey(req)}`;
+
   const now = Date.now();
+  cleanupExpired(now);
+  pruneIfNeeded(now);
+
   let entry = store.get(key);
   if (!entry || now > entry.resetAt) {
     entry = { count: 1, resetAt: now + WINDOW_MS };

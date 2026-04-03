@@ -10,6 +10,9 @@
 | `VITE_API_URL` | — | 권장 | `VITE_API_URL` | 프론트·랜딩 빌드 |
 | `VITE_REQUIRE_LOGIN` | — | 선택 | — | 프론트 |
 | `LANDING_ADMIN_PASSWORD` | 필수(Tienda) | — | — | API |
+| `ALLOWED_ORIGINS` | 운영/프로덕션에서 권장→필수 | — | — | API (CORS) |
+| `FRONTEND_ORIGIN` | 권장 | — | — | API (CORS/리다이렉트) |
+| `LANDING_ORIGIN` | 선택 | — | — | API (CORS) |
 | `GEMINI_API_KEY` / `OPENAI_API_KEY` | 선택 | — | — | API |
 | `SERPAPI_KEY` | 선택 | — | — | API |
 | `VITE_ALLOW_BUILD_WITHOUT_SUPABASE` | — | CI만 | — | GitHub Actions 빌드 안정화 (프로덕션 비권장) |

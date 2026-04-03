@@ -4,8 +4,7 @@
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import type {
   MarketReportOutputOptions,
   ReportLanguage,
@@ -16,8 +15,7 @@ import type {
 } from "./marketIntel/types.js";
 import { runMarketIntelSupervisor } from "./marketIntelAgents/index.js";
 import { buildTopCompanyDetails } from "./marketIntelService.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { getLocalDataDir } from "../lib/localDataDir.js";
 
 /** In-memory store: jobId -> { path, contentType, filename } for download route */
 const reportFileStore = new Map<string, { path: string; contentType: string; filename: string }>();
@@ -480,7 +478,7 @@ export async function generateReportBuffer(data: ReportData, format: string): Pr
   return { buffer, contentType, ext };
 }
 
-const REPORTS_DIR = join(__dirname, "..", "reports");
+const REPORTS_DIR = join(getLocalDataDir(), "reports");
 
 /** Save report to disk and register for download; returns download path segment */
 async function saveReport(jobId: string, buffer: Buffer, format: string, ext: string, contentType: string): Promise<string> {

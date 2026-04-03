@@ -87,6 +87,8 @@ export interface ShortsPipelineJob {
   /** 파일 삭제된 시점 (만료/상한 정리 후 체크리스트만 남을 때) */
   fileDeletedAt?: string;
   error?: string;
+  /** 파이프라인을 시작한 Supabase 사용자 (YouTube 토큰·배포 시 사용) */
+  ownerUserId?: string;
   createdAt: string;
   updatedAt: string;
 }

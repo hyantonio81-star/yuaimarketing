@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
@@ -16,6 +16,8 @@ import {
   Shield,
   User,
   Link2,
+  Menu,
+  X,
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -68,12 +70,12 @@ const navGroups = [
 ];
 
 const linkClass = (isActive) =>
-  `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+  `flex items-center gap-3 px-3 py-2.5 lg:py-2 min-h-11 lg:min-h-0 rounded-md text-sm transition-colors touch-manipulation ${
     isActive ? "bg-primary/15 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
   }`;
 
 const subLinkClass = (isActive) =>
-  `flex items-center gap-3 pl-8 pr-3 py-1.5 rounded-md text-xs transition-colors ${
+  `flex items-center gap-3 pl-8 pr-3 py-2 lg:py-1.5 min-h-10 lg:min-h-0 rounded-md text-xs transition-colors touch-manipulation ${
     isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted/70"
   }`;
 
@@ -82,6 +84,8 @@ export default function Layout() {
   const { user, session, signOut, isAdmin, refreshSession } = useAuth();
   const { countries, currentCountryCode, setCountry, loading: marketLoading } = useMarket();
   const [govManualMode, setGovManualMode] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     api
@@ -94,9 +98,62 @@ export default function Layout() {
     refreshSession();
   }, [refreshSession]);
 
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileNavOpen]);
+
   return (
-    <div className="min-h-screen bg-background flex">
-      <aside className="w-56 border-r border-border bg-card/50 flex flex-col shrink-0">
+    <div className="min-h-screen bg-background flex min-w-0">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-30 flex min-h-14 items-center gap-2 border-b border-border bg-card/95 px-3 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] backdrop-blur-md supports-[backdrop-filter]:bg-card/80">
+        <button
+          type="button"
+          onClick={() => setMobileNavOpen(true)}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md hover:bg-muted touch-manipulation"
+          aria-expanded={mobileNavOpen}
+          aria-controls="app-sidebar"
+          aria-label={t("nav.openMenu")}
+        >
+          <Menu className="h-6 w-6" aria-hidden />
+        </button>
+        <img src="/logo.png" alt="" className="h-8 w-auto object-contain shrink-0" />
+        <span className="truncate text-sm font-semibold text-foreground">{t("appName")}</span>
+      </header>
+
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          className="lg:hidden fixed inset-0 z-40 bg-black/50 touch-manipulation"
+          aria-label={t("nav.closeMenu")}
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
+
+      <aside
+        id="app-sidebar"
+        className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,100vw-1rem)] flex-col border-r border-border bg-card shadow-xl transition-transform duration-200 ease-out lg:static lg:z-auto lg:w-56 lg:translate-x-0 lg:bg-card/50 lg:shadow-none shrink-0 ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-border px-3 py-2 lg:hidden">
+          <span className="text-sm font-semibold text-foreground">{t("appName")}</span>
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(false)}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-md hover:bg-muted touch-manipulation"
+            aria-label={t("nav.closeMenu")}
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
         <div className="p-4 border-b border-border">
           <img
             src="/logo.png"
@@ -227,10 +284,12 @@ export default function Layout() {
           </div>
         </div>
       </aside>
-      <main className="flex-1 overflow-auto">
-        <ErrorBoundary>
-          <Outlet />
-        </ErrorBoundary>
+      <main className="flex-1 min-w-0 w-full overflow-x-hidden overflow-y-auto pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0">
+        <div className="mx-auto w-full max-w-[100vw] px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6">
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
+        </div>
       </main>
     </div>
   );

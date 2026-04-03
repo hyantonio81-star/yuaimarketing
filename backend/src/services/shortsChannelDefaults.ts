@@ -6,6 +6,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { getSupabaseAdmin } from "../lib/supabaseServer.js";
+import { getLocalDataDir } from "../lib/localDataDir.js";
 
 export interface ShortsChannelDefaults {
   language?: string;
@@ -30,7 +31,7 @@ export interface ShortsChannelDefaults {
 const DEFAULTS_FILE = "shorts_channel_defaults.json";
 
 function getDefaultsPath(): string {
-  return join(process.cwd(), "data", DEFAULTS_FILE);
+  return join(getLocalDataDir(), DEFAULTS_FILE);
 }
 
 let cache: Record<string, ShortsChannelDefaults> = {};

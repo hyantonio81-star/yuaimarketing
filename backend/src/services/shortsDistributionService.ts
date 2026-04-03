@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 import type { DistributionQueueItem, ShortsPipelineJob } from "./shorts/shortsTypes.js";
 import { getJobAsync, persistJobs } from "./shortsAgentService.js";
 import { deployToPlatforms, type DeployPlatform } from "./shorts/shortsDeployAgent.js";
+import { YOUTUBE_LEGACY_USER_SENTINEL } from "./youtubeUploadService.js";
 
 const QUEUE_TABLE = "shorts_distribution_queue";
 
@@ -120,23 +121,32 @@ export async function getDistributionQueue(limit = 50): Promise<DistributionQueu
 /** 
  * 배포 워커 (스케줄러에 의해 호출됨)
  */
-export async function processDistributionQueue(): Promise<void> {
+export async function processDistributionQueue(opts: { limit?: number } = {}): Promise<{
+  processed: number;
+  success: number;
+  failed: number;
+}> {
   const supabase = getSupabaseAdmin();
-  if (!supabase) return;
+  if (!supabase) return { processed: 0, success: 0, failed: 0 };
 
   const now = new Date().toISOString();
+  const limit = Math.min(50, Math.max(1, opts.limit ?? 5));
   const { data: rows, error } = await supabase
     .from(QUEUE_TABLE)
     .select("*")
     .eq("status", "waiting")
     .lte("scheduled_at", now)
-    .limit(5);
+    .limit(limit);
 
-  if (error || !rows) return;
+  if (error || !rows) return { processed: 0, success: 0, failed: 0 };
 
   const items = (rows as any[]).map(rowToCamel);
+  let processed = 0;
+  let success = 0;
+  let failed = 0;
 
   for (const item of items) {
+    processed += 1;
     const job = await getJobAsync(item.jobId);
     if (!job || (!job.videoPath && !job.supabaseUrl)) {
       await supabase.from(QUEUE_TABLE).update({ 
@@ -144,6 +154,7 @@ export async function processDistributionQueue(): Promise<void> {
         error: "Video file not found",
         updated_at: now 
       }).eq("id", item.id);
+      failed += 1;
       continue;
     }
 
@@ -154,6 +165,12 @@ export async function processDistributionQueue(): Promise<void> {
       
       console.log(`[Distribution Worker] Publishing job ${item.jobId} to ${item.platform}...`);
       
+      const ytKey =
+        typeof item.metadata?.youtubeKey === "string" && item.metadata.youtubeKey.trim()
+          ? item.metadata.youtubeKey.trim()
+          : "default";
+      const ownerId = (job.ownerUserId ?? "").trim() || YOUTUBE_LEGACY_USER_SENTINEL;
+
       const { results, errors } = await deployToPlatforms(
         videoSource!,
         {
@@ -161,7 +178,8 @@ export async function processDistributionQueue(): Promise<void> {
           description: item.metadata?.description || job.script?.hook || "",
         },
         [item.platform as DeployPlatform],
-        "default"
+        ytKey,
+        ownerId
       );
 
       const result = (results as any)[item.platform];
@@ -174,6 +192,7 @@ export async function processDistributionQueue(): Promise<void> {
           metadata: { ...item.metadata, deployedUrl: result.url },
           updated_at: new Date().toISOString() 
         }).eq("id", item.id);
+        success += 1;
       } else {
         throw new Error(platformError || "Deployment failed");
       }
@@ -190,13 +209,16 @@ export async function processDistributionQueue(): Promise<void> {
         scheduled_at: new Date(Date.now() + 3600000).toISOString(),
         updated_at: new Date().toISOString() 
       }).eq("id", item.id);
+      failed += 1;
     }
   }
+
+  return { processed, success, failed };
 }
 
-// 5분마다 대기열 체크
+// 5분마다 대기열 처리. 주의: Vercel 등 서버리스에서는 프로세스가 상주하지 않아 이 타이머가 사실상 동작하지 않을 수 있음 → 상시 백엔드 또는 Cron 필요.
 if (process.env.NODE_ENV !== "test") {
   setInterval(() => {
-    processDistributionQueue().catch(err => console.error("[Distribution Interval Error]:", err));
-  }, 300000); 
+    processDistributionQueue().catch((err) => console.error("[Distribution Interval Error]:", err));
+  }, 300000);
 }

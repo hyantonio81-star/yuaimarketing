@@ -32,7 +32,9 @@
 |------|-----------|--------|----------|
 | `SUPABASE_URL` | 필수(권장) | 인증·DB·24/7 이력·B2C 설정 | 로그인·이력·B2C 영속화 미동작 |
 | `SUPABASE_ANON_KEY` | 필수(권장) | 클라이언트 인증 | 동일 |
-| `SUPABASE_SERVICE_ROLE_KEY` | 선택 | 서버 전용 작업 | 일부 API 제한 |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Vercel·Shorts YouTube OAuth 시 필수**, 그 외 권장 | `youtube_oauth_store` upsert 등 서버 전용 DB | YouTube 연동 토큰이 사용자별로 저장되지 않음·기타 관리 API 제한 |
+
+마이그레이션 `youtube_oauth_store` 적용 후, 프로덕션(Vercel) 백엔드 환경에 **반드시** `SUPABASE_SERVICE_ROLE_KEY`를 넣어야 Shorts에서 Google OAuth 완료 시 refresh 토큰이 DB에 남습니다.
 
 ### 2.3 Google
 
@@ -76,7 +78,7 @@
 | 목표 | 필요한 것 |
 |------|------------|
 | **대시보드만** | Node, Supabase(권장), 백엔드 `.env` 최소 |
-| **Shorts E2E(업로드까지)** | + YouTube OAuth, (선택) OpenAI, **FFmpeg** ([FFMPEG_SETUP.md](./FFMPEG_SETUP.md)) |
+| **Shorts E2E(업로드까지)** | + YouTube OAuth, **Supabase service role** + `youtube_oauth_store` 마이그레이션, (선택) OpenAI, **FFmpeg** ([FFMPEG_SETUP.md](./FFMPEG_SETUP.md)) |
 | **Threads 포스트 발행** | + Threads Commerce 연동(토큰), Amazon RSS 또는 소스 1개 |
 | **B2B 발송** | + B2B API·검증 설정; WhatsApp 등은 외부 자동화 |
 | **24/7 스케줄** | + `DAILY_ROUTINE_ENABLED` 미설정 또는 true, Vercel이면 외부 cron |
