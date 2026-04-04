@@ -11,7 +11,7 @@ Vercel serverless cannot bundle FFmpeg. Treat **`/api/shorts/health`** as the so
 
 **Deploy queue:** `POST` or `GET /api/shorts/distribution/queue/process` with the worker secret (Cron-friendly GET).
 
-**Buffer refill:** `POST` or `GET /api/shorts/buffer/refill` with the worker secret. Configure `SHORTS_BUFFER_*` env vars. Root `vercel.json` may Cron-hit `/api/index?path=shorts/buffer/refill` and `shorts/distribution/queue/process`. Set Vercel **CRON_SECRET** to the **same value** as `SHORTS_WORKER_SECRET` so `Authorization: Bearer …` is accepted.
+**Buffer refill:** `POST` or `GET /api/shorts/buffer/refill` with the worker secret. `vercel.json` uses **daily** Crons on Hobby (buffer 07:00 UTC, distribution 06:00 UTC). Set **CRON_SECRET** = **SHORTS_WORKER_SECRET** for Bearer auth.
 
 See also: `FFMPEG_SETUP.md`, `SHORTS_REMOTE_ASSEMBLY.md`.
 
