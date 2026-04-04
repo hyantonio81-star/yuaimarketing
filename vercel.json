@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/index?path=shorts/distribution/queue/process",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/index?path=shorts/buffer/refill",
-      "schedule": "0 * * * *"
+      "schedule": "0 7 * * *"
     }
   ],
   "buildCommand": "npm run build",
