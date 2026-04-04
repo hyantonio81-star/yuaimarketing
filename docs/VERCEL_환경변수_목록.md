@@ -78,14 +78,27 @@ Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variable
 
 ---
 
-## 3. 넣지 않는 것
+## 3. 문제 해결: `youtube_oauth_store` RLS 오류
+
+연동 시 `new row violates row-level security policy for table 'youtube_oauth_store'` 가 나오면, API가 **service_role** 이 아닌 **anon** 으로 DB에 붙은 경우가 대부분입니다.
+
+1. [Supabase](https://supabase.com/dashboard) → Project **Settings** → **API**
+2. **Project API keys** 에서 **service_role** secret 을 복사 (JWT, `eyJ` 로 시작 — **anon public** 과 다름)
+3. **Vercel** 환경 변수 `SUPABASE_SERVICE_ROLE_KEY` 에 붙여넣기 (로컬이면 `backend/.env`)
+4. **Redeploy** / 백엔드 재시작 후 다시 「계정 추가」
+
+`anon` 키를 실수로 `SUPABASE_SERVICE_ROLE_KEY` 에 넣으면 같은 증상이 납니다.
+
+---
+
+## 4. 넣지 않는 것
 
 - **`FFMPEG_PATH`** 를 Vercel 서버리스에 넣어도 **바이너리가 없으면** 실제 조립은 되지 않습니다. FFmpeg 가 필요하면 **Docker 호스트** 또는 **로컬 워커**를 사용하세요.
 - **Service Role 키·DB 비밀번호·워커 시크릿** 은 GitHub/Vercel 로그에 노출되지 않게 관리하세요.
 
 ---
 
-## 4. 관련 문서
+## 5. 관련 문서
 
 - [VERCEL_DEPLOY.md](./VERCEL_DEPLOY.md) — 배포 절차
 - [ENV_AND_DEPS_체크리스트.md](./ENV_AND_DEPS_체크리스트.md) — 전체 변수·도구

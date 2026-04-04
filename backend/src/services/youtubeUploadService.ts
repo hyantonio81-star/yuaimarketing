@@ -212,7 +212,14 @@ async function saveToSupabase(userId: string, store: UserYoutubeStore): Promise<
   );
   if (error) {
     console.error("[youtube_oauth_store upsert]", error.message);
-    return error.message;
+    const msg = error.message ?? "";
+    if (/row-level security|rls/i.test(msg)) {
+      return (
+        `${msg} — 백엔드가 Supabase service_role 키 없이(anon 등) 접속한 경우에 자주 발생합니다. ` +
+        "Vercel·로컬 backend/.env 의 SUPABASE_SERVICE_ROLE_KEY 에 Dashboard → Settings → API 의 service_role secret(JWT, 보통 eyJ로 시작)을 넣고 재시작·재배포하세요. anon 키를 service_role 칸에 넣지 마세요."
+      );
+    }
+    return msg;
   }
   return null;
 }
