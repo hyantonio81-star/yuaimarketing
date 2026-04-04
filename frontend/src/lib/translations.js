@@ -95,7 +95,7 @@ export const translations = {
       ffmpegNotInstalled:
         "이 서버에 FFmpeg가 없어 실제 mp4가 만들어지지 않습니다. 스크립트·이미지·TTS는 될 수 있으나 「스텁 영상」이면 재생·유튜브 업로드는 불가입니다. 호스트에 FFmpeg를 설치하거나 Docker 이미지(backend/Dockerfile)로 백엔드를 실행하세요. 설치했는데 PATH에 없으면 backend/.env의 FFMPEG_PATH에 ffmpeg.exe 전체 경로를 지정하세요(가이드 참고).",
       ffmpegVercelNotice:
-        "Vercel 서버리스에는 FFmpeg를 쓸 수 없어 실제 Shorts mp4는 이 환경에서 생성되지 않습니다. 로컬·VPS 등 FFmpeg가 있는 서버에서 파이프라인을 실행하세요.",
+        "Vercel 서버리스에는 FFmpeg를 쓸 수 없어 실제 Shorts mp4는 이 환경에서 생성되지 않습니다. 같은 PC에 FFmpeg·FFMPEG_PATH를 넣어도, 앱이 Vercel API를 호출하는 한 서버에는 반영되지 않습니다. 원격 조립 워커(npm run shorts:assembly-worker)를 쓰거나, 로컬에서 백엔드를 띄우고 프론트가 그 API를 보도록 하세요.",
       ffmpegVercelRemoteWorkerHint:
         "Vercel에는 FFmpeg가 없지만 원격 조립이 켜져 있으면 작업이 「원격 조립 대기」로 큐에 들어갑니다. FFmpeg가 있는 워커(스크립트 shorts-assembly-worker)를 주기적으로 실행하세요.",
       youtubeVercelEphemeralHint:
@@ -1618,7 +1618,7 @@ export const translations = {
       ffmpegNotInstalled:
         "Without FFmpeg, no real mp4 is produced. Script/images/TTS may still run; if a job shows the stub badge, playback and YouTube upload are not possible. If FFmpeg is installed but not on PATH, set FFMPEG_PATH in backend/.env to the full path to ffmpeg.exe (see install guide).",
       ffmpegVercelNotice:
-        "Vercel serverless has no FFmpeg, so real Shorts mp4 files are not generated here. Run the pipeline on a host with FFmpeg (local/VPS).",
+        "Vercel serverless has no FFmpeg, so real Shorts mp4 files are not generated here. Installing FFmpeg on your PC does not help while the app calls the Vercel API. Use the remote assembly worker (npm run shorts:assembly-worker) or run the backend locally and point the frontend at it.",
       ffmpegVercelRemoteWorkerHint:
         "Vercel has no FFmpeg, but with remote assembly enabled jobs enter “Remote assembly pending”. Run the FFmpeg worker periodically (npm script shorts:assembly-worker).",
       youtubeVercelEphemeralHint:
@@ -3140,7 +3140,7 @@ export const translations = {
       ffmpegNotInstalled:
         "Sin FFmpeg no hay mp4 real. Guión/imágenes/TTS pueden generarse; si el trabajo muestra la insignia de prueba, no hay reproducción ni subida a YouTube. Si FFmpeg está instalado pero no está en PATH, define FFMPEG_PATH en backend/.env con la ruta completa a ffmpeg.exe (ver guía).",
       ffmpegVercelNotice:
-        "Vercel serverless no tiene FFmpeg; no se generan mp4 Shorts reales aquí. Ejecuta el pipeline en un servidor con FFmpeg (local/VPS).",
+        "Vercel serverless no tiene FFmpeg; no se generan mp4 Shorts reales aquí. Instalar FFmpeg en tu PC no sirve si la app sigue llamando a la API de Vercel. Usa el worker de ensamblaje remoto (npm run shorts:assembly-worker) o ejecuta el backend local y apunta el frontend ahí.",
       ffmpegVercelRemoteWorkerHint:
         "Vercel no tiene FFmpeg, pero con ensamblaje remoto activo los trabajos quedan en “Ensamblaje remoto pendiente”. Ejecuta el worker con FFmpeg periódicamente (npm run shorts:assembly-worker).",
       youtubeVercelEphemeralHint:
