@@ -103,6 +103,8 @@ export const translations = {
       setupGuideLink: "연동 관리에서 설정",
       youtubeConnectCta: "YouTube 연결하기",
       ffmpegInstallGuideLink: "FFmpeg 설치 가이드",
+      errorActionYoutube: "연동 관리에서 YouTube 연결",
+      errorActionFfmpegHelp: "스텁 해소: FFmpeg 설치 안내",
       remoteAssemblyDocLink: "Vercel·원격 조립 안내",
       workerSecretStatusOk: "워커 시크릿이 서버에 설정되어 있습니다. FFmpeg가 있는 환경에서 npm run shorts:assembly-worker 를 주기적으로 실행하세요.",
       workerSecretStatusMissing:
@@ -1624,6 +1626,8 @@ export const translations = {
       setupGuideLink: "Set up in Connections",
       youtubeConnectCta: "Connect YouTube",
       ffmpegInstallGuideLink: "FFmpeg install guide",
+      errorActionYoutube: "Connect YouTube in Connections",
+      errorActionFfmpegHelp: "Fix stub: FFmpeg setup",
       remoteAssemblyDocLink: "Vercel & remote assembly",
       workerSecretStatusOk: "SHORTS_WORKER_SECRET is set on the server. Run npm run shorts:assembly-worker on a machine with FFmpeg (e.g. on a schedule).",
       workerSecretStatusMissing:
@@ -3144,6 +3148,8 @@ export const translations = {
       setupGuideLink: "Configurar en Conexiones",
       youtubeConnectCta: "Conectar YouTube",
       ffmpegInstallGuideLink: "Guía de instalación de FFmpeg",
+      errorActionYoutube: "Conectar YouTube en Conexiones",
+      errorActionFfmpegHelp: "Quitar prueba: guía FFmpeg",
       remoteAssemblyDocLink: "Vercel y ensamblaje remoto",
       workerSecretStatusOk: "SHORTS_WORKER_SECRET está definido en el servidor. Ejecuta npm run shorts:assembly-worker en un equipo con FFmpeg (p. ej. por cron).",
       workerSecretStatusMissing:

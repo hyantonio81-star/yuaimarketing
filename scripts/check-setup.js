@@ -38,11 +38,12 @@ if (ffmM) {
   process.env.FFMPEG_PATH = ffmM[1].trim().replace(/^["']|["']$/g, "");
 }
 const ffmpegExe = (process.env.FFMPEG_PATH || "").trim() || "ffmpeg";
+// shell:true on Windows breaks FFMPEG_PATH with spaces (e.g. C:\Users\Name Surname\...)
 const ffmOk =
   spawnSync(ffmpegExe, ["-version"], {
     stdio: "pipe",
     encoding: "utf-8",
-    shell: process.platform === "win32",
+    shell: false,
   }).status === 0;
 if (ffmOk) {
   checks.push({

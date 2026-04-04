@@ -31,6 +31,21 @@ powershell -ExecutionPolicy Bypass -File scripts/install-ffmpeg-windows.ps1
 1. [https://www.gyan.dev/ffmpeg/builds/](https://www.gyan.dev/ffmpeg/builds/) 또는 [ffmpeg.org](https://ffmpeg.org/download.html)에서 Windows 빌드 다운로드.
 2. 압축 해제 후 `bin` 폴더를 PATH에 추가 (시스템 환경 변수 또는 사용자 환경 변수).
 
+### 방법 3: BtbN FFmpeg-Builds (GitHub 릴리스)
+
+[ffmpeg.org](https://www.ffmpeg.org/download.html)에서도 “Windows builds by **BtbN**”으로 연결되는 자동 빌드입니다.
+
+- 릴리스: [github.com/BtbN/FFmpeg-Builds/releases](https://github.com/BtbN/FFmpeg-Builds/releases)
+- Windows 64비트 예: **`ffmpeg-master-latest-win64-gpl-shared.zip`** (또는 `-gpl` 정적에 가까운 패키지). 압축 해제 후 **`bin\ffmpeg.exe`** 를 사용합니다.
+- **`-shared` 빌드**는 `ffmpeg.exe`와 같은 `bin` 안의 **DLL을 함께 두어야** 합니다. 폴더째 두고 `FFMPEG_PATH`만 `ffmpeg.exe` 절대 경로로 지정하는 방식이 안전합니다.
+- Nexus Shorts는 일반적인 인코딩(`libx264` 등)을 쓰므로 **GPL** 빌드로 무방합니다. (배포·라이선스 정책이 엄격하면 LGPL 변형과 법무 검토를 고려하세요.)
+
+`backend/.env` 예:
+
+```env
+FFMPEG_PATH=C:\도구\ffmpeg-master-latest-win64-gpl-shared\bin\ffmpeg.exe
+```
+
 ---
 
 ## macOS

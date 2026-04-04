@@ -2,7 +2,7 @@
 
 Nexus AI Shorts 파이프라인에서 **편집 에이전트**가 이미지+TTS+BGM을 mp4로 조립할 때 FFmpeg가 필요합니다. 미설치 시 편집 단계는 스텁 경로만 반환합니다.
 
-- 공식: [ffmpeg.org/download](https://www.ffmpeg.org/download.html) — `ffmpeg-*.tar.xz` 는 **소스(컴파일용)** 입니다. Windows 개발은 **winget** 또는 **Gyan 빌드** 권장.
+- 공식: [ffmpeg.org/download](https://www.ffmpeg.org/download.html) — `ffmpeg-*.tar.xz` 는 **소스(컴파일용)** 입니다. Windows는 **winget**, **Gyan**, **[BtbN FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases)** 등 **바이너리** 권장.
 
 ---
 
@@ -24,6 +24,12 @@ winget install Gyan.FFmpeg --accept-package-agreements --accept-source-agreement
 
 1. [https://www.gyan.dev/ffmpeg/builds/](https://www.gyan.dev/ffmpeg/builds/) 또는 [ffmpeg.org](https://ffmpeg.org/download.html)에서 Windows 빌드 다운로드.
 2. 압축 해제 후 `bin` 폴더를 PATH에 추가 (시스템 환경 변수 또는 사용자 환경 변수).
+
+### 방법 3: BtbN FFmpeg-Builds (GitHub)
+
+- [github.com/BtbN/FFmpeg-Builds/releases](https://github.com/BtbN/FFmpeg-Builds/releases) 에서 예: **`ffmpeg-master-latest-win64-gpl-shared.zip`** 다운로드.
+- 압축 해제 후 **`bin\ffmpeg.exe`** 사용. `-shared` 빌드는 **`bin` 폴더의 DLL을 그대로 두고** `FFMPEG_PATH`에 `ffmpeg.exe` 전체 경로만 지정하는 것이 안전합니다.
+- `backend/.env` 예: `FFMPEG_PATH=C:\...\bin\ffmpeg.exe`
 
 ---
 

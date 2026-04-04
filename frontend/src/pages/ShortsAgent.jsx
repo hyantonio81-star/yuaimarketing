@@ -12,6 +12,47 @@ function publicDocHref(filename) {
   return `${prefix}docs/${filename}`;
 }
 
+/** 작업 실패 시: YouTube 미연동 · 스텁(FFmpeg) 안내 링크 */
+function ShortsJobErrorActions({ error, videoStub, jobStatus, t }) {
+  const err = error != null && String(error).trim() !== "" ? String(error) : "";
+  const showYoutube =
+    !!err &&
+    (/youtube\s*:\s*[^\n]*not connected/i.test(err) ||
+      /youtube not connected/i.test(err) ||
+      /link your google account/i.test(err));
+  const showFfmpeg = Boolean(videoStub) && (!!err || jobStatus === "failed");
+  if (!err && !showFfmpeg) return null;
+  return (
+    <div className="flex flex-col gap-1.5 w-full basis-full min-w-[min(100%,280px)]">
+      {err ? <span className="text-destructive text-xs break-words">{err}</span> : null}
+      {(showYoutube || showFfmpeg) && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-xs font-medium">
+          {showYoutube && (
+            <Link
+              to="/settings/connections"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              <Link2 className="w-3.5 h-3.5 shrink-0" />
+              {t("shortsAgent.errorActionYoutube")}
+            </Link>
+          )}
+          {showFfmpeg && (
+            <a
+              href={publicDocHref("FFMPEG_SETUP.md")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-amber-900 dark:text-amber-100 underline underline-offset-2"
+            >
+              {t("shortsAgent.errorActionFfmpegHelp")}
+              <ExternalLink className="w-3 h-3 shrink-0" />
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** 업로드된 영상 ID: API 필드 또는 URL에서 추출 */
 function extractYoutubeVideoId(job) {
   if (!job) return null;
@@ -1100,7 +1141,12 @@ export default function ShortsAgent() {
               (runResult.videoUrl && String(runResult.videoUrl).includes("youtube")) ||
               runResult.youtubeVideoId) && <YoutubeExtraLinks job={runResult} t={t} />}
             {runResult.error && (
-              <p className="text-xs text-destructive">{runResult.error}</p>
+              <ShortsJobErrorActions
+                error={runResult.error}
+                videoStub={runResult.videoStub}
+                jobStatus={runResult.status}
+                t={t}
+              />
             )}
             {runResult.status === "done" && runResult.youtubeProcessingStatus && (
               <p className="text-xs text-muted-foreground">
@@ -1350,9 +1396,12 @@ export default function ShortsAgent() {
                     </button>
                   </>
                 )}
-                {job.error && (
-                  <span className="text-destructive text-xs">{job.error}</span>
-                )}
+                <ShortsJobErrorActions
+                  error={job.error}
+                  videoStub={job.videoStub}
+                  jobStatus={job.status}
+                  t={t}
+                />
               </li>
             ))}
           </ul>
