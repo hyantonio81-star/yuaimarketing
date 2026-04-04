@@ -78,5 +78,6 @@ node scripts/check-setup.js
 
 ## 참고
 
+- [로컬백엔드_FFMPEG.md](./로컬백엔드_FFMPEG.md) — Vercel에는 변수만 두고 **PC에서 FFmpeg로 Shorts 조립**할 때 (`backend/.env` 복사·localhost:5173)
 - [SHORTS_AI_TEAMS_기획.md](./SHORTS_AI_TEAMS_기획.md) — 편집 에이전트(§4.6)
 - [E2E_FIRST_RUN_기획.md](./E2E_FIRST_RUN_기획.md) — Shorts E2E 체크리스트
