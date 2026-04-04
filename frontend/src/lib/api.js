@@ -328,6 +328,30 @@ export const shortsApi = {
     api.post("/shorts/distribution/queue", { jobIds, platforms, scheduledAt }).then((r) => r.data),
   getDistributionQueue: () =>
     api.get("/shorts/distribution/queue").then((r) => r.data),
+
+  listContentSeries: () => api.get("/shorts/series").then((r) => r.data),
+  createContentSeries: (body) => api.post("/shorts/series", body).then((r) => r.data),
+  getContentSeries: (seriesId, includeEpisodes) =>
+    api.get(`/shorts/series/${encodeURIComponent(seriesId)}`, {
+      params: includeEpisodes ? { include: "episodes" } : {},
+    }).then((r) => r.data),
+  patchContentSeries: (seriesId, body) =>
+    api.patch(`/shorts/series/${encodeURIComponent(seriesId)}`, body).then((r) => r.data),
+  deleteContentSeries: (seriesId) =>
+    api.delete(`/shorts/series/${encodeURIComponent(seriesId)}`).then((r) => r.data),
+  listSeriesEpisodes: (seriesId) =>
+    api.get(`/shorts/series/${encodeURIComponent(seriesId)}/episodes`).then((r) => r.data),
+  createSeriesEpisode: (seriesId, body) =>
+    api.post(`/shorts/series/${encodeURIComponent(seriesId)}/episodes`, body).then((r) => r.data),
+  patchSeriesEpisode: (seriesId, episodeId, body) =>
+    api
+      .patch(`/shorts/series/${encodeURIComponent(seriesId)}/episodes/${encodeURIComponent(episodeId)}`, body)
+      .then((r) => r.data),
+  chunkSeriesText: (seriesId, body) =>
+    api.post(`/shorts/series/${encodeURIComponent(seriesId)}/episodes/chunk-text`, body).then((r) => r.data),
+  getSerialPipelineHint: (genre) =>
+    api.get("/shorts/series/pipeline-hint", { params: { genre } }).then((r) => r.data),
+  getMusicVideoInfo: () => api.get("/shorts/music-video/info").then((r) => r.data),
 };
 
 /** 이커머스 채널 연동 (B2C). orgId 있으면 X-Organization-Id 헤더로 전달. */

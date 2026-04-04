@@ -1,7 +1,14 @@
 /**
  * Shorts 배포 에이전트: 로컬 mp4 → 다중 플랫폼 (YouTube 실제 연동, TikTok/Instagram/Facebook 스텁)
  */
-import { uploadVideo as youtubeUploadVideo, getConnectionStatus as getYoutubeConnectionStatus } from "../youtubeUploadService.js";
+import { writeFile, mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import {
+  uploadVideo as youtubeUploadVideo,
+  getConnectionStatus as getYoutubeConnectionStatus,
+  type YoutubeUploadPreset,
+} from "../youtubeUploadService.js";
 
 export type DeployPlatform = "youtube" | "tiktok" | "instagram" | "facebook";
 
@@ -15,23 +22,30 @@ export interface DeployMeta {
 export interface DeployResult {
   videoId: string;
   url: string;
+  youtubeProcessingStatus?: "processing" | "succeeded" | "failed";
+  youtubeProcessingDetail?: string;
 }
 
 export async function deployToYouTube(
   videoPath: string,
   meta: DeployMeta,
   youtubeKey: string = "default",
-  ownerUserId: string = ""
+  ownerUserId: string = "",
+  uploadPreset: YoutubeUploadPreset = "shorts"
 ): Promise<DeployResult> {
   const { connected } = await getYoutubeConnectionStatus(youtubeKey, ownerUserId);
-  if (connected) {
-    const result = await youtubeUploadVideo(videoPath, meta, youtubeKey, ownerUserId);
-    if ("error" in result) throw new Error(result.error);
-    return { videoId: result.videoId, url: result.url };
+  if (!connected) {
+    throw new Error(
+      "YouTube not connected. Link your Google account in Shorts Agent, then run upload again."
+    );
   }
+  const result = await youtubeUploadVideo(videoPath, meta, youtubeKey, ownerUserId, { uploadPreset });
+  if ("error" in result) throw new Error(result.error);
   return {
-    videoId: "stub-video-id",
-    url: "https://www.youtube.com/shorts/stub-video-id",
+    videoId: result.videoId,
+    url: result.url,
+    youtubeProcessingStatus: result.youtubeProcessingStatus,
+    youtubeProcessingDetail: result.youtubeProcessingDetail,
   };
 }
 
@@ -64,7 +78,8 @@ export async function deployToPlatforms(
   meta: DeployMeta,
   platforms: DeployPlatform[],
   youtubeKey: string = "default",
-  ownerUserId: string = ""
+  ownerUserId: string = "",
+  youtubeUploadPreset: YoutubeUploadPreset = "shorts"
 ): Promise<DeployToPlatformsResult> {
   const results: Partial<Record<DeployPlatform, DeployResult>> = {};
   const errors: Partial<Record<DeployPlatform, string>> = {};
@@ -88,7 +103,13 @@ export async function deployToPlatforms(
       };
 
       if (platform === "youtube") {
-        results.youtube = await deployToYouTube(videoPath, platformMeta, youtubeKey, ownerUserId);
+        results.youtube = await deployToYouTube(
+          videoPath,
+          platformMeta,
+          youtubeKey,
+          ownerUserId,
+          youtubeUploadPreset
+        );
       } else if (platform === "tiktok") {
         results.tiktok = await deployToTikTok(videoPath, platformMeta);
       } else if (platform === "instagram") {
@@ -101,4 +122,26 @@ export async function deployToPlatforms(
     }
   }
   return { results, errors };
+}
+
+/** 공개 URL의 mp4를 임시 파일로 받아 deployToPlatforms 실행 (원격 조립 완료 후) */
+export async function deployToPlatformsFromRemoteUrl(
+  videoUrl: string,
+  meta: DeployMeta,
+  platforms: DeployPlatform[],
+  youtubeKey: string = "default",
+  ownerUserId: string = "",
+  youtubeUploadPreset: YoutubeUploadPreset = "shorts"
+): Promise<DeployToPlatformsResult> {
+  const res = await fetch(videoUrl);
+  if (!res.ok) throw new Error(`Failed to download video (${res.status})`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const dir = await mkdtemp(join(tmpdir(), "shorts-deploy-"));
+  const filePath = join(dir, "final.mp4");
+  await writeFile(filePath, buf);
+  try {
+    return await deployToPlatforms(filePath, meta, platforms, youtubeKey, ownerUserId, youtubeUploadPreset);
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }

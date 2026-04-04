@@ -2,7 +2,7 @@
 
 Nexus AI Shorts 파이프라인에서 **편집 에이전트**가 이미지+TTS+BGM을 mp4로 조립할 때 FFmpeg가 필요합니다. 미설치 시 편집 단계는 스텁 경로만 반환합니다.
 
-- **공식 다운로드·저장소 안내**: [FFmpeg Download / Git repositories](https://www.ffmpeg.org/download.html#repositories) — FFmpeg는 기본적으로 **소스 배포**이며, `ffmpeg-8.1.tar.xz` 같은 아카이브는 **직접 컴파일**용입니다. Windows에서 Shorts만 쓸 때는 아래 **바이너리 설치**가 현실적입니다.
+- 공식: [ffmpeg.org/download](https://www.ffmpeg.org/download.html) — `ffmpeg-*.tar.xz` 는 **소스(컴파일용)** 입니다. Windows 개발은 **winget** 또는 **Gyan 빌드** 권장.
 
 ---
 
@@ -16,15 +16,9 @@ Nexus AI Shorts 파이프라인에서 **편집 에이전트**가 이미지+TTS+B
 winget install Gyan.FFmpeg --accept-package-agreements --accept-source-agreements
 ```
 
-또는 프로젝트 루트에서:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install-ffmpeg-windows.ps1
-```
-
 - 설치 후 **새 터미널을 열어야** `ffmpeg` 명령이 인식됩니다. (PATH 반영)
 - 확인: 새 터미널에서 `ffmpeg -version`
-- PATH에 잡히지 않으면 `backend/.env`에 **`FFMPEG_PATH=C:\실제경로\ffmpeg.exe`** 를 넣으면 백엔드가 해당 실행 파일을 사용합니다.
+- PATH에 없으면 `backend/.env`에 **`FFMPEG_PATH`** 로 `ffmpeg.exe` 전체 경로 지정
 
 ### 방법 2: 수동 설치
 
@@ -63,5 +57,5 @@ node scripts/check-setup.js
 
 ## 참고
 
-- [SHORTS_AI_TEAMS_기획.md](./SHORTS_AI_TEAMS_기획.md) — 편집 에이전트(§4.6)
-- [E2E_FIRST_RUN_기획.md](./E2E_FIRST_RUN_기획.md) — Shorts E2E 체크리스트
+- 리포지토리의 `docs/SHORTS_AGENT.md` — Vercel 배포 시 원격 조립·워커
+- `docs/E2E_FIRST_RUN_기획.md` — Shorts E2E 체크리스트

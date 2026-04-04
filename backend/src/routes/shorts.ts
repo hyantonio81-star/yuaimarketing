@@ -20,6 +20,10 @@ import {
   uploadJob,
   cleanupExpiredShortsFiles,
   markJobVideoDeleted,
+  listPendingAssemblyJobs,
+  markAssemblyJobProcessing,
+  failRemoteAssembly,
+  finalizeRemoteAssemblySuccess,
 } from "../services/shortsAgentService.js";
 import {
   addToDistributionQueue,
@@ -43,6 +47,22 @@ import {
 import { checkFfmpegInstalled } from "../services/shorts/shortsHealthService.js";
 import { AVATAR_PRESETS } from "../services/shortsImageService.js";
 import { getChannelDefaults, setChannelDefaults } from "../services/shortsChannelDefaults.js";
+import {
+  listSeriesForUser,
+  getSeriesForUser,
+  createSeries,
+  updateSeries,
+  deleteSeries,
+  listEpisodesForSeries,
+  createEpisode,
+  updateEpisode,
+  deleteEpisode,
+  chunkTextIntoEpisodes,
+  serialContentPipelineHint,
+  musicVideoModeInfo,
+  type SeriesGenre,
+  type EpisodeStatus,
+} from "../services/contentSeriesService.js";
 import {
   getChannelProfile,
   setChannelProfile,
@@ -102,8 +122,12 @@ export async function shortsRoutes(app: FastifyInstance) {
     const providedSecret =
       (typeof workerSecretHeader === "string" ? workerSecretHeader : Array.isArray(workerSecretHeader) ? workerSecretHeader[0] : undefined)?.trim() ?? "";
 
+    const reqUrl = request.url ?? "";
     const isQueueWorkerEndpoint =
-      request.method === "POST" && request.url?.startsWith("/distribution/queue/process");
+      request.method === "POST" && reqUrl.includes("/distribution/queue/process");
+    const isAssemblyPending = request.method === "GET" && reqUrl.includes("/assembly/pending-jobs");
+    const isAssemblyComplete = request.method === "POST" && reqUrl.includes("/assembly/complete");
+    const isAssemblyClaim = request.method === "POST" && reqUrl.includes("/assembly/claim");
 
     const MAX_SECRET_LEN = 200;
     const secretsMatch = (() => {
@@ -114,9 +138,11 @@ export async function shortsRoutes(app: FastifyInstance) {
       return timingSafeEqual(Buffer.from(providedSecret, "utf8"), Buffer.from(workerSecret, "utf8"));
     })();
 
-    const isQueueWorker = isQueueWorkerEndpoint && secretsMatch;
+    const isShortsWorkerBypass =
+      secretsMatch &&
+      (isQueueWorkerEndpoint || isAssemblyPending || isAssemblyComplete || isAssemblyClaim);
 
-    if (isQueueWorker) {
+    if (isShortsWorkerBypass) {
       return;
     }
 
@@ -149,11 +175,62 @@ export async function shortsRoutes(app: FastifyInstance) {
   /** Shorts 시스템 헬스체크 (FFmpeg 등). Vercel은 /var/task 에 바이너리 설치 불가 → 프론트에서 별도 안내 */
   app.get("/health", async () => {
     const onVercel = process.env.VERCEL === "1";
+    const remoteAssemblyEnabled = process.env.SHORTS_DISABLE_REMOTE_ASSEMBLY !== "1";
+    const workerSecretConfigured = Boolean((process.env.SHORTS_WORKER_SECRET ?? "").trim());
     if (onVercel) {
-      return { ffmpegInstalled: false, deployTarget: "vercel" as const };
+      return {
+        ffmpegInstalled: false,
+        deployTarget: "vercel" as const,
+        remoteAssemblyEnabled,
+        workerSecretConfigured,
+      };
     }
     const ffmpegInstalled = await checkFfmpegInstalled();
-    return { ffmpegInstalled, deployTarget: "standard" as const };
+    return {
+      ffmpegInstalled,
+      deployTarget: "standard" as const,
+      remoteAssemblyEnabled,
+      workerSecretConfigured,
+    };
+  });
+
+  /** 원격 조립 대기 job 목록 (X-Shorts-Worker-Secret) */
+  app.get<{ Querystring: { limit?: string } }>("/assembly/pending-jobs", async (request) => {
+    const limit = Math.min(50, Math.max(1, parseInt(request.query?.limit ?? "10", 10) || 10));
+    const jobs = await listPendingAssemblyJobs(limit);
+    return { jobs };
+  });
+
+  /** 워커가 job을 가져갈 때 processing 표시 후 매니페스트 반환 */
+  app.post<{ Body: { jobId?: string } }>("/assembly/claim", async (request, reply) => {
+    const jobId = (request.body as { jobId?: string } | undefined)?.jobId?.trim();
+    if (!jobId) return reply.code(400).send({ error: "jobId required" });
+    const ok = await markAssemblyJobProcessing(jobId);
+    if (!ok) return reply.code(404).send({ error: "Job not claimable" });
+    const job = await getJobAsync(jobId);
+    return { jobId, manifest: job?.assemblyManifest ?? null };
+  });
+
+  /** 원격 조립 완료: final.mp4 공개 URL 또는 오류 (X-Shorts-Worker-Secret) */
+  app.post<{
+    Body: { jobId?: string; supabasePublicUrl?: string; error?: string };
+  }>("/assembly/complete", async (request, reply) => {
+    const body = (request.body ?? {}) as { jobId?: string; supabasePublicUrl?: string; error?: string };
+    const jobId = body.jobId?.trim();
+    if (!jobId) return reply.code(400).send({ error: "jobId required" });
+    if (body.error) {
+      await failRemoteAssembly(jobId, body.error);
+      return { ok: true };
+    }
+    const url = body.supabasePublicUrl?.trim();
+    if (!url) return reply.code(400).send({ error: "supabasePublicUrl or error required" });
+    try {
+      await finalizeRemoteAssemblySuccess(jobId, url);
+      return { ok: true };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return reply.code(400).send({ error: msg });
+    }
   });
 
   /** YouTube 연동 계정 목록 (최대 5개) */
@@ -169,7 +246,7 @@ export async function shortsRoutes(app: FastifyInstance) {
     const uid = (await getAuthUserFromRequest(request))?.id ?? "";
     const key = request.query?.key?.trim() || request.query?.state?.trim();
     const result = getAuthUrl(key || undefined, uid);
-    if (!result) return { url: null, error: "YOUTUBE_CLIENT_ID not set" };
+    if (!result.ok) return { url: null, error: result.error };
     return { url: result.url, state: result.state };
   });
 
@@ -486,4 +563,173 @@ export async function shortsRoutes(app: FastifyInstance) {
     const result = await processDistributionQueue({ limit: typeof limit === "number" ? limit : undefined });
     return { ok: true, ...result };
   });
+
+  /** 연재 시리즈 목록 */
+  app.get("/series", async (request: FastifyRequest) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+    const series = await listSeriesForUser(uid);
+    return { series };
+  });
+
+  app.post<{
+    Body: {
+      title?: string;
+      genre?: string;
+      defaultLanguage?: string;
+      tone?: string;
+      youtubePlaylistId?: string;
+    };
+  }>("/series", async (request: FastifyRequest<{ Body: Record<string, unknown> }>, reply: FastifyReply) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+    const body = request.body ?? {};
+    const title = String(body.title ?? "").trim();
+    const genre = String(body.genre ?? "shorts").trim() as SeriesGenre;
+    const allowed: SeriesGenre[] = ["novel", "comic", "music", "longform", "shorts"];
+    if (!title) return reply.code(400).send({ error: "title required" });
+    if (!allowed.includes(genre)) return reply.code(400).send({ error: "invalid genre" });
+    try {
+      const row = await createSeries(uid, {
+        title,
+        genre,
+        defaultLanguage: body.defaultLanguage != null ? String(body.defaultLanguage) : undefined,
+        tone: body.tone != null ? String(body.tone) : undefined,
+        youtubePlaylistId: body.youtubePlaylistId != null ? String(body.youtubePlaylistId) : undefined,
+      });
+      return row;
+    } catch (e) {
+      return reply.code(500).send({ error: e instanceof Error ? e.message : "create failed" });
+    }
+  });
+
+  app.get<{ Querystring: { genre?: string } }>("/series/pipeline-hint", async (request: FastifyRequest<{ Querystring: { genre?: string } }>) => {
+    const g = (request.query?.genre ?? "shorts").trim() as SeriesGenre;
+    return serialContentPipelineHint(g);
+  });
+
+  app.get<{ Params: { seriesId: string }; Querystring: { include?: string } }>(
+    "/series/:seriesId",
+    async (request: FastifyRequest<{ Params: { seriesId: string }; Querystring: { include?: string } }>, reply: FastifyReply) => {
+      const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+      const s = await getSeriesForUser(uid, request.params.seriesId);
+      if (!s) return reply.code(404).send({ error: "Series not found" });
+      const include = request.query?.include === "episodes";
+      if (!include) return s;
+      const episodes = await listEpisodesForSeries(uid, request.params.seriesId);
+      return { ...s, episodes };
+    }
+  );
+
+  app.patch<{
+    Params: { seriesId: string };
+    Body: Record<string, unknown>;
+  }>("/series/:seriesId", async (request, reply: FastifyReply) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+    const body = request.body ?? {};
+    const patch: Parameters<typeof updateSeries>[2] = {};
+    if (body.title != null) patch.title = String(body.title);
+    if (body.genre != null) patch.genre = String(body.genre) as SeriesGenre;
+    if (body.defaultLanguage != null) patch.defaultLanguage = String(body.defaultLanguage);
+    if (body.tone !== undefined) patch.tone = body.tone === null ? null : String(body.tone);
+    if (body.youtubePlaylistId !== undefined)
+      patch.youtubePlaylistId = body.youtubePlaylistId === null ? null : String(body.youtubePlaylistId);
+    const updated = await updateSeries(uid, request.params.seriesId, patch);
+    if (!updated) return reply.code(404).send({ error: "Series not found" });
+    return updated;
+  });
+
+  app.delete<{ Params: { seriesId: string } }>("/series/:seriesId", async (request, reply: FastifyReply) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+    const ok = await deleteSeries(uid, request.params.seriesId);
+    if (!ok) return reply.code(404).send({ error: "Series not found" });
+    return { ok: true };
+  });
+
+  app.get<{ Params: { seriesId: string } }>("/series/:seriesId/episodes", async (request, reply: FastifyReply) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+    const series = await getSeriesForUser(uid, request.params.seriesId);
+    if (!series) return reply.code(404).send({ error: "Series not found" });
+    const episodes = await listEpisodesForSeries(uid, request.params.seriesId);
+    return { episodes };
+  });
+
+  app.post<{
+    Params: { seriesId: string };
+    Body: Record<string, unknown>;
+  }>("/series/:seriesId/episodes", async (request, reply: FastifyReply) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+    const body = request.body ?? {};
+    const episodeIndex = typeof body.episodeIndex === "number" ? body.episodeIndex : parseInt(String(body.episodeIndex ?? ""), 10);
+    if (!Number.isFinite(episodeIndex)) return reply.code(400).send({ error: "episodeIndex required" });
+    try {
+      const ep = await createEpisode(uid, request.params.seriesId, {
+        episodeIndex,
+        title: body.title != null ? String(body.title) : undefined,
+        bodyText: body.bodyText != null ? String(body.bodyText) : undefined,
+        imageAssetUrl: body.imageAssetUrl != null ? String(body.imageAssetUrl) : undefined,
+        jobId: body.jobId != null ? String(body.jobId) : undefined,
+        scheduledPublishAt: body.scheduledPublishAt != null ? String(body.scheduledPublishAt) : undefined,
+        status: body.status != null ? (String(body.status) as EpisodeStatus) : undefined,
+        metadata: typeof body.metadata === "object" && body.metadata != null ? (body.metadata as Record<string, unknown>) : undefined,
+      });
+      return ep;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "create failed";
+      const code = msg.includes("not found") ? 404 : 400;
+      return reply.code(code).send({ error: msg });
+    }
+  });
+
+  app.post<{
+    Params: { seriesId: string };
+    Body: { text?: string; charsPerEpisode?: number; titlePrefix?: string };
+  }>("/series/:seriesId/episodes/chunk-text", async (request, reply: FastifyReply) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+    const body = request.body ?? {};
+    const text = String(body.text ?? "");
+    try {
+      const episodes = await chunkTextIntoEpisodes(uid, request.params.seriesId, {
+        text,
+        charsPerEpisode: typeof body.charsPerEpisode === "number" ? body.charsPerEpisode : undefined,
+        titlePrefix: body.titlePrefix != null ? String(body.titlePrefix) : undefined,
+      });
+      return { episodes };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "chunk failed";
+      const code = msg.includes("not found") ? 404 : 400;
+      return reply.code(code).send({ error: msg });
+    }
+  });
+
+  app.patch<{
+    Params: { seriesId: string; episodeId: string };
+    Body: Record<string, unknown>;
+  }>("/series/:seriesId/episodes/:episodeId", async (request, reply: FastifyReply) => {
+    const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+    const body = request.body ?? {};
+    const patch: Parameters<typeof updateEpisode>[3] = {};
+    if (body.title !== undefined) patch.title = body.title === null ? null : String(body.title);
+    if (body.bodyText !== undefined) patch.bodyText = body.bodyText === null ? null : String(body.bodyText);
+    if (body.imageAssetUrl !== undefined)
+      patch.imageAssetUrl = body.imageAssetUrl === null ? null : String(body.imageAssetUrl);
+    if (body.jobId !== undefined) patch.jobId = body.jobId === null ? null : String(body.jobId);
+    if (body.scheduledPublishAt !== undefined)
+      patch.scheduledPublishAt = body.scheduledPublishAt === null ? null : String(body.scheduledPublishAt);
+    if (body.status != null) patch.status = String(body.status) as EpisodeStatus;
+    if (body.metadata != null && typeof body.metadata === "object") patch.metadata = body.metadata as Record<string, unknown>;
+    const ep = await updateEpisode(uid, request.params.seriesId, request.params.episodeId, patch);
+    if (!ep) return reply.code(404).send({ error: "Episode not found" });
+    return ep;
+  });
+
+  app.delete<{ Params: { seriesId: string; episodeId: string } }>(
+    "/series/:seriesId/episodes/:episodeId",
+    async (request, reply: FastifyReply) => {
+      const uid = (await getAuthUserFromRequest(request))?.id ?? "";
+      const ok = await deleteEpisode(uid, request.params.seriesId, request.params.episodeId);
+      if (!ok) return reply.code(404).send({ error: "Episode not found" });
+      return { ok: true };
+    }
+  );
+
+  app.get("/music-video/info", async () => musicVideoModeInfo());
 }

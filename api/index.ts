@@ -36,7 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const qs = queryParams.toString();
   const targetUrl = qs ? `${basePath}?${qs}` : basePath;
 
-  // Ensure /api/health works even when rewrites route it here.
+  // `/api/health`는 보통 `api/health.js`가 처리합니다. 여기는 `path=health`로 들어온 경우만 해당.
   if (normalized === "health") {
     res.setHeader("Content-Type", "application/json");
     res.status(200).end(JSON.stringify({ status: "ok", service: "yuaimarketing-api", source: "api/index.ts" }));

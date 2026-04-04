@@ -21,7 +21,45 @@ import { generateVisualAssets } from "./shorts/shortsVisualAgent.js";
 import { generateSceneAudios } from "./shorts/shortsVoiceAgent.js";
 import { selectBgm } from "./shorts/shortsBgmAgent.js";
 import { assembleVideo as editAssembleVideo } from "./shorts/shortsEditAgent.js";
-import { deployToYouTube, deployToPlatforms, type DeployPlatform } from "./shorts/shortsDeployAgent.js";
+import {
+  deployToYouTube,
+  deployToPlatforms,
+  deployToPlatformsFromRemoteUrl,
+  type DeployPlatform,
+  type DeployResult,
+} from "./shorts/shortsDeployAgent.js";
+import type { YoutubeUploadPreset } from "./youtubeUploadService.js";
+import { checkFfmpegInstalled } from "./shorts/shortsHealthService.js";
+import { buildRemoteAssemblyManifest } from "./shorts/shortsRemoteAssemblyPrepare.js";
+
+function pipelineFormatFromMergedFormat(format: unknown): "shorts" | "long" {
+  return format === "long" ? "long" : "shorts";
+}
+
+function youtubePresetForJob(job: ShortsPipelineJob): YoutubeUploadPreset {
+  return job.pipelineFormat === "long" ? "long" : "shorts";
+}
+
+/** YouTube 배포 결과 → job 메타 (폴링·비디오 ID) */
+function applyYoutubeDeployToJob(job: ShortsPipelineJob, yt: DeployResult | undefined) {
+  if (!yt?.videoId) return;
+  job.youtubeVideoId = yt.videoId;
+  if (yt.youtubeProcessingStatus === "processing") job.youtubeProcessingStatus = "processing";
+  else if (yt.youtubeProcessingStatus === "succeeded") job.youtubeProcessingStatus = "succeeded";
+  else if (yt.youtubeProcessingStatus === "failed") job.youtubeProcessingStatus = "failed";
+  else job.youtubeProcessingStatus = "uploaded";
+  job.youtubeProcessingDetail = yt.youtubeProcessingDetail;
+}
+
+/** 요청한 플랫폼 중 배포 실패가 있으면 즉시 예외 (스텁 URL로 done 처리 방지) */
+function assertNoDeployErrors(requested: DeployPlatform[], errors: Partial<Record<DeployPlatform, string>>) {
+  const parts: string[] = [];
+  for (const p of requested) {
+    const msg = errors[p];
+    if (msg) parts.push(`${p}: ${msg}`);
+  }
+  if (parts.length) throw new Error(parts.join("; "));
+}
 import { updateVideoStats } from "./shorts/shortsStatsService.js";
 import { loadJobsFromFile, saveJobsToFile } from "./shortsJobStore.js";
 import {
@@ -33,7 +71,7 @@ import {
   RETENTION_DAYS_VIDEO_READY,
 } from "./shortsStorage.js";
 import { getChannelDefaults } from "./shortsChannelDefaults.js";
-import type { ShortsPipelineJob, ShortsScript } from "./shorts/shortsTypes.js";
+import type { RemoteAssemblyManifest, ShortsPipelineJob, ShortsScript } from "./shorts/shortsTypes.js";
 import { generateNewsBlogContent } from "./contentAutomation/dualContentService.js";
 import { publishToBlogger } from "./contentAutomation/bloggerService.js";
 
@@ -157,9 +195,10 @@ export async function uploadToYouTube(
   videoPath: string,
   meta: { title: string; description?: string },
   youtubeKey: string = "default",
-  ownerUserId: string = ""
+  ownerUserId: string = "",
+  uploadPreset: YoutubeUploadPreset = "shorts"
 ) {
-  return deployToYouTube(videoPath, meta, youtubeKey, ownerUserId);
+  return deployToYouTube(videoPath, meta, youtubeKey, ownerUserId, uploadPreset);
 }
 
 export interface RunPipelineOptions {
@@ -262,6 +301,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     status: "pending",
     createdAt: now,
     updatedAt: now,
+    pipelineFormat: pipelineFormatFromMergedFormat(merged.format),
     ...(ownerUserIdOpt ? { ownerUserId: ownerUserIdOpt } : {}),
   };
   JOBS.set(jobId, job);
@@ -363,6 +403,38 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
     job.status = "video";
     job.updatedAt = new Date().toISOString();
     await persistJobs();
+
+    const ffmpegOk = await checkFfmpegInstalled();
+    const delegateRequested =
+      process.env.SHORTS_DISABLE_REMOTE_ASSEMBLY !== "1" &&
+      (process.env.SHORTS_DELEGATE_ASSEMBLY === "1" || process.env.VERCEL === "1") &&
+      !ffmpegOk;
+
+    if (delegateRequested) {
+      const manifest = await buildRemoteAssemblyManifest(
+        jobId,
+        script,
+        sceneImages,
+        sceneAudios,
+        bgmPath,
+        merged.bgmVolume ?? 0.15
+      );
+      if (manifest) {
+        job.assemblyManifest = manifest;
+        job.assemblyStatus = "queued";
+        job.assemblyFollowup = {
+          uploadMode: merged.uploadMode,
+          platforms: merged.platforms,
+          youtubeKey: merged.youtubeKey,
+          ownerUserId: merged.ownerUserId ?? "",
+        };
+        job.status = "pending_assembly";
+        job.updatedAt = new Date().toISOString();
+        await persistJobs();
+        return;
+      }
+    }
+
     const videoMeta = await editAssembleVideo({
       script,
       sceneImages,
@@ -370,14 +442,19 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
       bgmPath,
       bgmVolume: merged.bgmVolume ?? 0.15,
     });
+    job.videoStub = videoMeta.fromStub;
+
+    /** Vercel 등: /tmp 조립 경로가 업로드 직후 사라질 수 있어, 먼저 영구(job) 디렉터리로 복사 후 업로드 */
+    const retentionForCopy =
+      merged.uploadMode === "review_first" ? RETENTION_DAYS_VIDEO_READY : RETENTION_DAYS_UPLOADED;
+    const { videoPath: storedPath, supabaseUrl, expiresAt } = await copyVideoToStorage(
+      jobId,
+      videoMeta.videoPath,
+      job.createdAt,
+      retentionForCopy
+    );
 
     if (merged.uploadMode === "review_first") {
-      const { videoPath: storedPath, supabaseUrl, expiresAt } = await copyVideoToStorage(
-        jobId,
-        videoMeta.videoPath,
-        job.createdAt,
-        RETENTION_DAYS_VIDEO_READY
-      );
       job.status = "video_ready";
       job.videoPath = storedPath;
       job.supabaseUrl = supabaseUrl;
@@ -395,13 +472,18 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
       title: script.topicTitle.slice(0, 100),
       description: script.hook + "\n\n" + script.scenes.map((s) => s.text).join("\n"),
     };
-    const { results } = await deployToPlatforms(
-      videoMeta.videoPath,
+    const platformList: DeployPlatform[] = merged.platforms?.length ? merged.platforms : ["youtube"];
+    const ytPreset = youtubePresetForJob(job);
+    const { results, errors: deployErrors } = await deployToPlatforms(
+      storedPath,
       meta,
-      merged.platforms,
+      platformList,
       merged.youtubeKey,
-      merged.ownerUserId
+      merged.ownerUserId,
+      ytPreset
     );
+    assertNoDeployErrors(platformList, deployErrors);
+    applyYoutubeDeployToJob(job, results?.youtube);
     const deployedUrls: Record<string, string> = {};
     for (const [platform, r] of Object.entries(results ?? {})) {
       if (r?.url) {
@@ -426,12 +508,6 @@ async function runPipelineInternal(jobId: string, keywords: string[], merged: an
     job.videoUrl = job.deployedUrls?.youtube ?? Object.values(deployedUrls)[0];
 
     job.status = "done";
-    const { videoPath: storedPath, supabaseUrl, expiresAt } = await copyVideoToStorage(
-      jobId,
-      videoMeta.videoPath,
-      job.createdAt,
-      RETENTION_DAYS_UPLOADED
-    );
     job.videoPath = storedPath;
     job.supabaseUrl = supabaseUrl;
     job.expiresAt = expiresAt;
@@ -455,7 +531,7 @@ export async function uploadJob(
   await ensureJobsLoaded();
   const job = JOBS.get(jobId);
   if (!job) throw new Error("Job not found");
-  if (job.status !== "video_ready" || !job.videoPath || !job.script) {
+  if (job.status !== "video_ready" || (!job.videoPath && !job.supabaseUrl) || !job.script) {
     throw new Error("Job is not ready for upload");
   }
   const meta = {
@@ -464,7 +540,13 @@ export async function uploadJob(
   };
   const list: DeployPlatform[] = platforms?.length ? platforms : ["youtube"];
   const ownerUserId = actingUserId.trim() || job.ownerUserId || "";
-  const { results } = await deployToPlatforms(job.videoPath, meta, list, youtubeKey, ownerUserId);
+  const videoSource = job.videoPath ?? job.supabaseUrl ?? "";
+  const ytPreset = youtubePresetForJob(job);
+  const { results, errors: deployErrors } = job.videoPath
+    ? await deployToPlatforms(job.videoPath, meta, list, youtubeKey, ownerUserId, ytPreset)
+    : await deployToPlatformsFromRemoteUrl(videoSource, meta, list, youtubeKey, ownerUserId, ytPreset);
+  assertNoDeployErrors(list, deployErrors);
+  applyYoutubeDeployToJob(job, results?.youtube);
   const deployedUrls: Record<string, string> = {};
   for (const [platform, r] of Object.entries(results ?? {})) {
     if (r?.url) deployedUrls[platform] = r.url;
@@ -505,8 +587,119 @@ export async function getLibrary(): Promise<ShortsPipelineJob[]> {
   await ensureJobsLoaded();
   await runCleanupExpiredFiles();
   return Array.from(JOBS.values())
-    .filter((j) => (j.status === "done" || j.status === "video_ready") && j.videoPath && !isExpired(j.expiresAt))
+    .filter(
+      (j) =>
+        (j.status === "done" || j.status === "video_ready") &&
+        (j.videoPath || j.supabaseUrl) &&
+        !isExpired(j.expiresAt)
+    )
     .sort((a, b) => (b.updatedAt > a.updatedAt ? 1 : -1));
+}
+
+export async function listPendingAssemblyJobs(
+  limit = 10
+): Promise<{ jobId: string; manifest: RemoteAssemblyManifest }[]> {
+  await ensureJobsLoaded();
+  const n = Math.min(50, Math.max(1, limit));
+  return Array.from(JOBS.values())
+    .filter((j) => j.status === "pending_assembly" && j.assemblyStatus === "queued" && j.assemblyManifest)
+    .sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1))
+    .slice(0, n)
+    .map((j) => ({ jobId: j.jobId, manifest: j.assemblyManifest! }));
+}
+
+export async function markAssemblyJobProcessing(jobId: string): Promise<boolean> {
+  await ensureJobsLoaded();
+  const job = JOBS.get(jobId);
+  if (!job || job.status !== "pending_assembly" || job.assemblyStatus !== "queued") return false;
+  job.assemblyStatus = "processing";
+  job.updatedAt = new Date().toISOString();
+  await persistJobs();
+  return true;
+}
+
+export async function failRemoteAssembly(jobId: string, message: string): Promise<void> {
+  await ensureJobsLoaded();
+  const job = JOBS.get(jobId);
+  if (!job) return;
+  job.assemblyStatus = "failed";
+  job.assemblyError = message;
+  job.status = "failed";
+  job.error = message;
+  job.updatedAt = new Date().toISOString();
+  await persistJobs();
+}
+
+export async function finalizeRemoteAssemblySuccess(jobId: string, supabasePublicUrl: string): Promise<void> {
+  await ensureJobsLoaded();
+  const job = JOBS.get(jobId);
+  if (!job?.assemblyFollowup || !job.assemblyManifest) {
+    throw new Error("Job is not in remote assembly state");
+  }
+
+  job.assemblyStatus = "complete";
+  job.assemblyError = undefined;
+  job.supabaseUrl = supabasePublicUrl;
+  job.videoPath = undefined;
+  job.videoStub = false;
+
+  const { uploadMode, platforms, youtubeKey, ownerUserId } = job.assemblyFollowup;
+  const meta = {
+    title: job.script!.topicTitle.slice(0, 100),
+    description: job.script!.hook + "\n\n" + job.script!.scenes.map((s) => s.text).join("\n"),
+  };
+  const platformList: DeployPlatform[] = platforms?.length ? platforms : ["youtube"];
+  const now = new Date().toISOString();
+
+  if (uploadMode === "review_first") {
+    job.status = "video_ready";
+    job.expiresAt = getExpiresAt(job.createdAt, RETENTION_DAYS_VIDEO_READY);
+    job.updatedAt = now;
+    await persistJobs();
+    await enforceVideoReadyCap();
+    return;
+  }
+
+  job.status = "upload";
+  job.updatedAt = now;
+  await persistJobs();
+
+  const ytPreset = youtubePresetForJob(job);
+  const { results, errors: deployErrors } = await deployToPlatformsFromRemoteUrl(
+    supabasePublicUrl,
+    meta,
+    platformList,
+    youtubeKey,
+    ownerUserId,
+    ytPreset
+  );
+  assertNoDeployErrors(platformList, deployErrors);
+  applyYoutubeDeployToJob(job, results?.youtube);
+  const deployedUrls: Record<string, string> = {};
+  for (const [platform, r] of Object.entries(results ?? {})) {
+    if (r?.url) {
+      deployedUrls[platform] = r.url;
+      try {
+        await updateVideoStats({
+          jobId,
+          platform,
+          externalId: r.url.split("/").pop() || jobId,
+          views: 0,
+          likes: 0,
+          comments: 0,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch {
+        // ignore
+      }
+    }
+  }
+  job.deployedUrls = Object.keys(deployedUrls).length ? deployedUrls : undefined;
+  job.videoUrl = job.deployedUrls?.youtube ?? Object.values(deployedUrls)[0];
+  job.status = "done";
+  job.expiresAt = getExpiresAt(now, RETENTION_DAYS_UPLOADED);
+  job.updatedAt = new Date().toISOString();
+  await persistJobs();
 }
 
 export async function getChecklist(limit = 100): Promise<ShortsPipelineJob[]> {

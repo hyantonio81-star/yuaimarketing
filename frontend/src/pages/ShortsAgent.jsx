@@ -5,6 +5,71 @@ import SectionCard from "../components/SectionCard";
 import { shortsApi } from "../lib/api";
 import { useLanguage } from "../context/LanguageContext.jsx";
 
+/** Vite `public/` 문서 링크 (예: /docs/FFMPEG_SETUP.md) */
+function publicDocHref(filename) {
+  const base = import.meta.env.BASE_URL ?? "/";
+  const prefix = base.endsWith("/") ? base : `${base}/`;
+  return `${prefix}docs/${filename}`;
+}
+
+/** 업로드된 영상 ID: API 필드 또는 URL에서 추출 */
+function extractYoutubeVideoId(job) {
+  if (!job) return null;
+  const raw = job.youtubeVideoId;
+  if (raw && /^[a-zA-Z0-9_-]{6,15}$/.test(String(raw))) return String(raw);
+  const urls = [job.videoUrl, job.deployedUrls?.youtube].filter(Boolean);
+  for (const u of urls) {
+    const s = String(u);
+    const m =
+      s.match(/(?:\/shorts\/|v=)([a-zA-Z0-9_-]{11})/) || s.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function YoutubeExtraLinks({ job, t }) {
+  const id = extractYoutubeVideoId(job);
+  if (!id) return null;
+  const watch = `https://www.youtube.com/watch?v=${id}`;
+  const shorts = `https://www.youtube.com/shorts/${id}`;
+  const studio = `https://studio.youtube.com/video/${id}/edit`;
+  return (
+    <div className="mt-2 space-y-1 rounded-md border border-border/60 bg-muted/20 px-2 py-2 text-xs">
+      <p className="text-muted-foreground">{t("shortsAgent.youtubeLinkAlternativesIntro")}</p>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <a
+          href={watch}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline inline-flex items-center gap-0.5"
+        >
+          {t("shortsAgent.youtubeOpenWatch")}
+          <ExternalLink className="w-3 h-3" />
+        </a>
+        <a
+          href={shorts}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline inline-flex items-center gap-0.5"
+        >
+          {t("shortsAgent.youtubeOpenShorts")}
+          <ExternalLink className="w-3 h-3" />
+        </a>
+        <a
+          href={studio}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline inline-flex items-center gap-0.5"
+        >
+          {t("shortsAgent.youtubeOpenStudio")}
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-snug">{t("shortsAgent.youtubePrivateLinkHint")}</p>
+    </div>
+  );
+}
+
 export default function ShortsAgent() {
   const { t } = useLanguage();
 
@@ -14,6 +79,7 @@ export default function ShortsAgent() {
     script: t("shortsAgent.statusScript"),
     images: t("shortsAgent.statusImages"),
     video: t("shortsAgent.statusVideo"),
+    pending_assembly: t("shortsAgent.statusPendingAssembly"),
     video_ready: t("shortsAgent.statusVideoReady"),
     upload: t("shortsAgent.statusUpload"),
     done: t("shortsAgent.statusDone"),
@@ -109,6 +175,8 @@ export default function ShortsAgent() {
   const [videoUrls, setVideoUrls] = useState({});
   const [ffmpegInstalled, setFfmpegInstalled] = useState(true);
   const [deployTarget, setDeployTarget] = useState("standard");
+  const [remoteAssemblyEnabled, setRemoteAssemblyEnabled] = useState(false);
+  const [workerSecretConfigured, setWorkerSecretConfigured] = useState(false);
   const [workflowOpen, setWorkflowOpen] = useState(false);
 
   const ensureVideoUrl = (jobId) => {
@@ -116,7 +184,14 @@ export default function ShortsAgent() {
     shortsApi
       .getJobVideoUrl(jobId)
       .then((url) => setVideoUrls((prev) => ({ ...prev, [jobId]: url })))
-      .catch((e) => setRunError(e?.apiMessage || e?.message || t("shortsAgent.videoLoadError")));
+      .catch((e) => {
+        const st = e?.response?.status;
+        setRunError(
+          st === 404
+            ? t("shortsAgent.videoLoadError404")
+            : e?.apiMessage || e?.message || t("shortsAgent.videoLoadError")
+        );
+      });
   };
 
   useEffect(() => {
@@ -162,9 +237,20 @@ export default function ShortsAgent() {
       .then((d) => { if (Array.isArray(d?.platforms) && d.platforms.length) setAvailablePlatforms(d.platforms); })
       .catch((e) => setYoutubeMessage({ type: "error", text: e?.apiMessage || e?.message || t("shortsAgent.youtubeError") }));
     
-    shortsApi.getHealth()
-      .then((d) => setFfmpegInstalled(d?.ffmpegInstalled ?? true))
-      .catch(() => setFfmpegInstalled(true)); // 에러 시 기본값 true (보수적 접근)
+    shortsApi
+      .getHealth()
+      .then((d) => {
+        setFfmpegInstalled(d?.ffmpegInstalled ?? true);
+        setDeployTarget(d?.deployTarget === "vercel" ? "vercel" : "standard");
+        setRemoteAssemblyEnabled(d?.remoteAssemblyEnabled === true);
+        setWorkerSecretConfigured(d?.workerSecretConfigured === true);
+      })
+      .catch(() => {
+        setFfmpegInstalled(true);
+        setDeployTarget("standard");
+        setRemoteAssemblyEnabled(false);
+        setWorkerSecretConfigured(false);
+      });
   }, []);
 
   /** 선택한 계정의 세부옵션 로드 (계정 변경 시 자동 + 불러오기 버튼) */
@@ -247,7 +333,16 @@ export default function ShortsAgent() {
 
   // 활성 작업(진행 중)이 있을 경우 폴링
   useEffect(() => {
-    const activeStatuses = ["pending", "collecting", "script", "images", "voice", "video", "upload"];
+    const activeStatuses = [
+      "pending",
+      "collecting",
+      "script",
+      "images",
+      "voice",
+      "video",
+      "pending_assembly",
+      "upload",
+    ];
     const hasActiveJobs = jobs.some((j) => activeStatuses.includes(j.status));
     
     if (!hasActiveJobs) return;
@@ -278,20 +373,24 @@ export default function ShortsAgent() {
   }, [jobs, runResult?.jobId]);
 
   useEffect(() => {
-    if ((runResult?.status === "video_ready" || runResult?.status === "done") && runResult?.jobId) {
+    if (
+      (runResult?.status === "video_ready" || runResult?.status === "done") &&
+      runResult?.jobId &&
+      !runResult?.videoStub
+    ) {
       ensureVideoUrl(runResult.jobId);
     }
-  }, [runResult?.status, runResult?.jobId]);
+  }, [runResult?.status, runResult?.jobId, runResult?.videoStub]);
 
   useEffect(() => {
     libraryJobs
-      .filter((job) => job?.status === "video_ready" && job?.jobId)
+      .filter((job) => job?.status === "video_ready" && job?.jobId && !job?.videoStub)
       .forEach((job) => ensureVideoUrl(job.jobId));
   }, [libraryJobs]);
 
   useEffect(() => {
     jobs
-      .filter((job) => job?.status === "video_ready" && job?.jobId)
+      .filter((job) => job?.status === "video_ready" && job?.jobId && !job?.videoStub)
       .forEach((job) => ensureVideoUrl(job.jobId));
   }, [jobs]);
 
@@ -458,6 +557,12 @@ export default function ShortsAgent() {
                   <li>{t("shortsAgent.workflowStep3")}</li>
                   <li>{t("shortsAgent.workflowStep4")}</li>
                   <li>{t("shortsAgent.workflowStep5")}</li>
+                  <li>
+                    {t("shortsAgent.workflowStep6")}{" "}
+                    <Link to="/shorts/serial" className="text-primary hover:underline font-medium">
+                      {t("nav.serialProjects")}
+                    </Link>
+                  </li>
                 </ol>
                 <p className="pt-1 text-[11px] border-t border-border/60">{t("shortsAgent.workflowIntegrations")}</p>
               </div>
@@ -496,14 +601,28 @@ export default function ShortsAgent() {
       {activeTab === "generate" && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           {youtubeAccounts.length === 0 && (
-            <div className="mb-6 space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-              <div className="flex flex-wrap items-center gap-2">
-                <AlertTriangle className="w-5 h-5 shrink-0" />
-                <span>{t("shortsAgent.youtubeNotConnectedBanner")}</span>
-                <Link to="/settings/connections" className="inline-flex items-center gap-1 font-medium text-amber-700 dark:text-amber-300 hover:underline">
-                  <ExternalLink className="w-4 h-4" />
-                  {t("shortsAgent.setupGuideLink")}
-                </Link>
+            <div className="mb-6 space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+              <div className="flex flex-wrap items-start gap-2">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p>{t("shortsAgent.youtubeNotConnectedBanner")}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      to="/settings/connections"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600"
+                    >
+                      <Link2 className="w-3.5 h-3.5" />
+                      {t("shortsAgent.youtubeConnectCta")}
+                    </Link>
+                    <Link
+                      to="/settings/connections"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-200 hover:underline"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      {t("shortsAgent.setupGuideLink")}
+                    </Link>
+                  </div>
+                </div>
               </div>
               {deployTarget === "vercel" && (
                 <p className="text-xs text-amber-900/80 dark:text-amber-100/90 pl-7">{t("shortsAgent.youtubeVercelEphemeralHint")}</p>
@@ -512,21 +631,76 @@ export default function ShortsAgent() {
           )}
 
           {!ffmpegInstalled && deployTarget === "vercel" && (
-            <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
-              <span>{t("shortsAgent.ffmpegVercelNotice")}</span>
+            <div className="mb-6 space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+              <div className="flex flex-wrap items-start gap-2">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p>
+                    {remoteAssemblyEnabled
+                      ? t("shortsAgent.ffmpegVercelRemoteWorkerHint")
+                      : t("shortsAgent.ffmpegVercelNotice")}
+                  </p>
+                  {!remoteAssemblyEnabled && (
+                    <p className="text-xs opacity-90">{t("shortsAgent.remoteAssemblyDisabledHint")}</p>
+                  )}
+                  {remoteAssemblyEnabled && (
+                    <p
+                      className={`text-xs ${workerSecretConfigured ? "text-emerald-800 dark:text-emerald-200" : "text-amber-900 dark:text-amber-100"}`}
+                    >
+                      {workerSecretConfigured
+                        ? t("shortsAgent.workerSecretStatusOk")
+                        : t("shortsAgent.workerSecretStatusMissing")}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium">
+                    <a
+                      href={publicDocHref("SHORTS_REMOTE_ASSEMBLY.md")}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-amber-900 underline underline-offset-2 dark:text-amber-100"
+                    >
+                      {t("shortsAgent.remoteAssemblyDocLink")}
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                    <a
+                      href={publicDocHref("FFMPEG_SETUP.md")}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-amber-900 underline underline-offset-2 dark:text-amber-100"
+                    >
+                      {t("shortsAgent.ffmpegInstallGuideLink")}
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
           {!ffmpegInstalled && deployTarget !== "vercel" && (
-            <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive dark:text-red-400">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
-              <span>{t("shortsAgent.ffmpegNotInstalled")}</span>
-              <Link to="/docs/FFMPEG_SETUP.md" className="inline-flex items-center gap-1 font-medium hover:underline">
-                <ExternalLink className="w-4 h-4" />
-                {t("shortsAgent.setupGuideLink")}
-              </Link>
+            <div className="mb-6 space-y-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive dark:text-red-400">
+              <div className="flex flex-wrap items-start gap-2">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p>{t("shortsAgent.ffmpegNotInstalled")}</p>
+                  <a
+                    href={publicDocHref("FFMPEG_SETUP.md")}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-semibold hover:underline"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    {t("shortsAgent.ffmpegInstallGuideLink")}
+                  </a>
+                </div>
+              </div>
             </div>
+          )}
+
+          {(!ffmpegInstalled || deployTarget === "vercel") && (
+            <p className="mb-6 text-xs text-muted-foreground border border-border rounded-lg px-3 py-2 bg-muted/20">
+              {t("shortsAgent.generationHowToVerify")}
+            </p>
           )}
 
       <SectionCard title={t("shortsAgent.youtubeAccount")} className="mb-6">
@@ -845,12 +1019,30 @@ export default function ShortsAgent() {
             <p className="text-sm font-medium text-foreground">
               {t("shortsAgent.runSuccess")} — {runResult.jobId}
             </p>
+            {runResult.videoStub && (
+              <p className="text-xs font-medium rounded-md border border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-100 px-2 py-1.5">
+                {t("shortsAgent.videoStubBadge")}
+              </p>
+            )}
             {runResult.topic && (
               <p className="text-xs text-muted-foreground">
                 {t("shortsAgent.topic")}: {runResult.topic.title}
               </p>
             )}
-            {runResult.status === "video_ready" && runResult.videoPath && (
+            {runResult.status === "pending_assembly" && (
+              <p className="text-xs text-muted-foreground border border-border rounded-md px-2 py-1.5 bg-muted/30">
+                {runResult.assemblyStatus === "processing"
+                  ? t("shortsAgent.assemblyProcessing")
+                  : t("shortsAgent.assemblyQueued")}
+              </p>
+            )}
+            {runResult.assemblyError && (
+              <p className="text-xs text-destructive">{runResult.assemblyError}</p>
+            )}
+            {runResult.status === "video_ready" && runResult.videoPath && runResult.videoStub && (
+              <p className="text-sm text-amber-800 dark:text-amber-200">{t("shortsAgent.videoStubNoPreview")}</p>
+            )}
+            {runResult.status === "video_ready" && runResult.videoPath && !runResult.videoStub && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">{t("shortsAgent.previewBeforeUpload")}</p>
                 <video
@@ -904,8 +1096,20 @@ export default function ShortsAgent() {
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             )}
+            {(runResult.deployedUrls?.youtube ||
+              (runResult.videoUrl && String(runResult.videoUrl).includes("youtube")) ||
+              runResult.youtubeVideoId) && <YoutubeExtraLinks job={runResult} t={t} />}
             {runResult.error && (
               <p className="text-xs text-destructive">{runResult.error}</p>
+            )}
+            {runResult.status === "done" && runResult.youtubeProcessingStatus && (
+              <p className="text-xs text-muted-foreground">
+                {runResult.youtubeProcessingStatus === "succeeded" && t("shortsAgent.youtubeProcessingOk")}
+                {runResult.youtubeProcessingStatus === "processing" && t("shortsAgent.youtubeProcessingWait")}
+                {runResult.youtubeProcessingStatus === "failed" && t("shortsAgent.youtubeProcessingFail")}
+                {runResult.youtubeProcessingStatus === "uploaded" && t("shortsAgent.youtubeProcessingUploaded")}
+                {runResult.youtubeProcessingDetail ? ` — ${runResult.youtubeProcessingDetail}` : ""}
+              </p>
             )}
           </div>
         )}
@@ -930,14 +1134,40 @@ export default function ShortsAgent() {
                       {job.script?.topicTitle || job.topic?.title}
                     </span>
                   )}
+                  {job.videoStub && (
+                    <span className="text-xs font-medium rounded border border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-100 px-2 py-0.5">
+                      {t("shortsAgent.videoStubBadge")}
+                    </span>
+                  )}
+                  {job.status === "pending_assembly" && (
+                    <span className="text-xs text-muted-foreground">
+                      {job.assemblyStatus === "processing"
+                        ? t("shortsAgent.assemblyProcessing")
+                        : t("shortsAgent.assemblyQueued")}
+                    </span>
+                  )}
+                  {job.assemblyError && <span className="text-xs text-destructive">{job.assemblyError}</span>}
+                  {job.status === "done" && job.youtubeProcessingStatus && (
+                    <span className="text-xs text-muted-foreground">
+                      {job.youtubeProcessingStatus === "succeeded" && t("shortsAgent.youtubeProcessingOk")}
+                      {job.youtubeProcessingStatus === "processing" && t("shortsAgent.youtubeProcessingWait")}
+                      {job.youtubeProcessingStatus === "failed" && t("shortsAgent.youtubeProcessingFail")}
+                      {job.youtubeProcessingStatus === "uploaded" && t("shortsAgent.youtubeProcessingUploaded")}
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2 items-start">
-                  <video
-                    src={videoUrls[job.jobId]}
-                    controls
-                    className="w-full max-w-xs rounded border border-border bg-black"
-                  />
+                  {job.videoStub ? (
+                    <p className="text-sm text-amber-800 dark:text-amber-200 max-w-xs">{t("shortsAgent.videoStubNoPreview")}</p>
+                  ) : (
+                    <video
+                      src={videoUrls[job.jobId]}
+                      controls
+                      className="w-full max-w-xs rounded border border-border bg-black"
+                    />
+                  )}
                   <div className="flex flex-col gap-2">
+                    {!job.videoStub && (
                     <a
                       href={videoUrls[job.jobId]}
                       download={`short-${job.jobId}.mp4`}
@@ -945,6 +1175,7 @@ export default function ShortsAgent() {
                     >
                       {t("shortsAgent.download")}
                     </a>
+                    )}
                     {(job.deployedUrls && Object.keys(job.deployedUrls).length > 0) ? (
                       <div className="flex flex-wrap gap-2">
                         {Object.entries(job.deployedUrls).map(([platform, url]) => (
@@ -960,7 +1191,14 @@ export default function ShortsAgent() {
                         YouTube
                       </a>
                     )}
-                    {job.status === "video_ready" && (
+                    {(job.deployedUrls?.youtube ||
+                      (job.videoUrl && String(job.videoUrl).includes("youtube")) ||
+                      job.youtubeVideoId) && (
+                      <div className="w-full">
+                        <YoutubeExtraLinks job={job} t={t} />
+                      </div>
+                    )}
+                    {job.status === "video_ready" && !job.videoStub && (
                       <button
                         type="button"
                         onClick={() => handleUploadJob(job.jobId)}
@@ -988,7 +1226,8 @@ export default function ShortsAgent() {
         ) : (
           <ul className="space-y-2">
             {checklistJobs.map((job) => (
-              <li key={job.jobId} className="flex flex-wrap items-center gap-2 rounded border border-border bg-muted/20 px-3 py-2 text-sm">
+              <li key={job.jobId} className="flex flex-col gap-2 rounded border border-border bg-muted/20 px-3 py-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
                 <ClipboardList className="w-4 h-4 text-muted-foreground shrink-0" />
                 <span className="font-mono text-xs text-muted-foreground">{job.jobId}</span>
                 <span className="px-2 py-0.5 rounded bg-muted text-muted-foreground text-xs">
@@ -1013,6 +1252,10 @@ export default function ShortsAgent() {
                     YouTube
                   </a>
                 )}
+                </div>
+                {(job.deployedUrls?.youtube ||
+                  (job.videoUrl && String(job.videoUrl).includes("youtube")) ||
+                  job.youtubeVideoId) && <YoutubeExtraLinks job={job} t={t} />}
               </li>
             ))}
           </ul>
@@ -1035,9 +1278,34 @@ export default function ShortsAgent() {
                 <span className="px-2 py-0.5 rounded bg-muted text-muted-foreground">
                   {STATUS_LABELS[job.status] ?? job.status}
                 </span>
+                {job.videoStub && (
+                  <span className="text-[10px] font-medium rounded border border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-100 px-1.5 py-0.5">
+                    {t("shortsAgent.videoStubBadge")}
+                  </span>
+                )}
                 {job.topic?.title && (
                   <span className="truncate max-w-[200px] text-foreground" title={job.topic.title}>
                     {job.topic.title}
+                  </span>
+                )}
+                {job.status === "pending_assembly" && (
+                  <span className="text-xs text-muted-foreground max-w-[220px] truncate">
+                    {job.assemblyStatus === "processing"
+                      ? t("shortsAgent.assemblyProcessing")
+                      : t("shortsAgent.assemblyQueued")}
+                  </span>
+                )}
+                {job.assemblyError && (
+                  <span className="text-xs text-destructive max-w-[220px] truncate" title={job.assemblyError}>
+                    {job.assemblyError}
+                  </span>
+                )}
+                {job.status === "done" && job.youtubeProcessingStatus && (
+                  <span className="text-xs text-muted-foreground">
+                    {job.youtubeProcessingStatus === "succeeded" && t("shortsAgent.youtubeProcessingOk")}
+                    {job.youtubeProcessingStatus === "processing" && t("shortsAgent.youtubeProcessingWait")}
+                    {job.youtubeProcessingStatus === "failed" && t("shortsAgent.youtubeProcessingFail")}
+                    {job.youtubeProcessingStatus === "uploaded" && t("shortsAgent.youtubeProcessingUploaded")}
                   </span>
                 )}
                 {(job.deployedUrls && Object.keys(job.deployedUrls).length > 0) ? (
@@ -1053,7 +1321,14 @@ export default function ShortsAgent() {
                     Shorts
                   </a>
                 )}
-                {(job.status === "video_ready" && job.videoPath) && (
+                {(job.deployedUrls?.youtube ||
+                  (job.videoUrl && String(job.videoUrl).includes("youtube")) ||
+                  job.youtubeVideoId) && (
+                  <div className="w-full basis-full">
+                    <YoutubeExtraLinks job={job} t={t} />
+                  </div>
+                )}
+                {(job.status === "video_ready" && job.videoPath && !job.videoStub) && (
                   <>
                     <a
                       href={videoUrls[job.jobId]}
@@ -1129,6 +1404,11 @@ export default function ShortsAgent() {
                         }`}>
                           {STATUS_LABELS[job.status] || job.status}
                         </span>
+                        {job.videoStub && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500/40 text-amber-700 dark:text-amber-300">
+                            {t("shortsAgent.videoStubBadge")}
+                          </span>
+                        )}
                         <span className="text-[10px] text-muted-foreground">
                           {new Date(job.createdAt).toLocaleDateString()}
                         </span>
@@ -1137,7 +1417,9 @@ export default function ShortsAgent() {
                     </div>
 
                     <div className="aspect-video rounded-lg bg-muted mb-3 flex items-center justify-center overflow-hidden border border-border group">
-                      {videoUrls[job.jobId] ? (
+                      {job.videoStub ? (
+                        <p className="text-xs text-center text-amber-800 dark:text-amber-200 px-2">{t("shortsAgent.videoStubNoPreview")}</p>
+                      ) : videoUrls[job.jobId] ? (
                         <video 
                           src={videoUrls[job.jobId]} 
                           className="w-full h-full object-cover"
@@ -1165,6 +1447,9 @@ export default function ShortsAgent() {
                           <span key={p} className="text-[10px] bg-muted px-1.5 py-0.5 rounded capitalize">{p}</span>
                         ))}
                       </div>
+                      {(job.deployedUrls?.youtube ||
+                        (job.videoUrl && String(job.videoUrl).includes("youtube")) ||
+                        job.youtubeVideoId) && <YoutubeExtraLinks job={job} t={t} />}
                     </div>
                   </div>
                 ))}

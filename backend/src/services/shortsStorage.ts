@@ -4,14 +4,47 @@
  * - 미업로드(video_ready): 10일 보관, 최대 10만 건 상한 후 오래된 것부터 파일 삭제.
  * SHORTS_STORAGE_PATH 환경변수 또는 backend/data/shorts 사용.
  */
-import { mkdir, copyFile, rm, readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { mkdir, rm, readFile, writeFile } from "node:fs/promises";
+import { existsSync, createReadStream, createWriteStream } from "node:fs";
+import { pipeline } from "node:stream/promises";
+import { basename, join } from "node:path";
 import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 import { getLocalDataDir } from "../lib/localDataDir.js";
+import { SHORTS_STUB_VIDEO_BYTES } from "./shorts/shortsEditAgent.js";
 
 const DEFAULT_SUBDIR = "shorts";
 const SUPABASE_BUCKET = "shorts-videos";
+
+const safeJobSegment = (jobId: string) => jobId.replace(/[^a-zA-Z0-9-_]/g, "_");
+
+/**
+ * 조립용 중간 자산(mp3 등) 업로드 → 공개 URL (워커가 다운로드)
+ */
+export async function uploadAssemblyBuffer(
+  jobId: string,
+  relativePath: string,
+  data: Buffer,
+  contentType: string
+): Promise<string | null> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const key = `${safeJobSegment(jobId)}/assembly/${relativePath.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  try {
+    const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(key, data, {
+      contentType,
+      upsert: true,
+    });
+    if (error) {
+      console.error("[uploadAssemblyBuffer]", error.message);
+      return null;
+    }
+    const { data: pub } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(key);
+    return pub.publicUrl;
+  } catch (e) {
+    console.error("[uploadAssemblyBuffer]", e);
+    return null;
+  }
+}
 
 function getStorageRoot(): string {
   const root = (process.env.SHORTS_STORAGE_PATH ?? "").trim();
@@ -94,7 +127,40 @@ export async function copyVideoToStorage(
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true });
   }
-  await copyFile(sourcePath, destPath);
+
+  const isStubSource = basename(sourcePath) === "stub.mp4";
+
+  async function writeMinimalStubAtDest(): Promise<void> {
+    await rm(destPath, { force: true }).catch(() => {});
+    await writeFile(destPath, Buffer.alloc(SHORTS_STUB_VIDEO_BYTES, 0));
+  }
+
+  /**
+   * stub.mp4 는 2KB 수준 — copyFile/스트림 대신 read→write 또는 소스 없으면 곧바로 목적지 스텁.
+   * (copyFile ENOENT 레이스·구버전 런타임 이슈 회피)
+   */
+  try {
+    if (isStubSource) {
+      if (existsSync(sourcePath)) {
+        const buf = await readFile(sourcePath);
+        await writeFile(destPath, buf);
+      } else {
+        console.warn("[copyVideoToStorage] stub source missing; writing minimal mp4 at", destPath);
+        await writeMinimalStubAtDest();
+      }
+    } else {
+      await pipeline(createReadStream(sourcePath), createWriteStream(destPath));
+    }
+  } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err ? (err as NodeJS.ErrnoException).code : "";
+    console.warn("[copyVideoToStorage] copy failed:", sourcePath, "->", destPath, err);
+    if (isStubSource || code === "ENOENT" || code === "ENOTDIR") {
+      await writeMinimalStubAtDest();
+    } else {
+      throw err;
+    }
+  }
 
   // 백그라운드에서 Supabase Storage 업로드 시도
   const supabaseUrl = await uploadToSupabase(jobId, destPath).catch(() => null);

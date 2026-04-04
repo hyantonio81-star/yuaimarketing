@@ -10,6 +10,8 @@
 |------|-----------|--------|----------|
 | Node.js 18.x ~ 20.x | 필수 | 전체 | 앱 기동 불가 |
 | FFmpeg | 선택 | Shorts 영상 조립 | 편집 단계 스텁 반환(실제 mp4 미생성) |
+| `FFMPEG_PATH` | 선택 | `ffmpeg`가 PATH에 없을 때 실행 파일 절대 경로 (Windows) | `backend/.env` — [FFMPEG_SETUP.md](./FFMPEG_SETUP.md) |
+| FFmpeg (별도 호스트) | 선택 | `shorts:assembly-worker` 원격 조립 | Vercel만 쓸 때 실제 mp4 없음·큐만 쌓임 |
 
 ---
 
@@ -25,6 +27,17 @@
 | `DAILY_ROUTINE_ENABLED` | 선택 | 24/7 일과 스케줄러 | `true`(미설정 시 활성) |
 | `TZ` / `ROUTINE_TIMEZONE` | 선택 | 스케줄 기준 시간대 | `Asia/Seoul` |
 | `VERCEL` | 선택 | `1` 이면 내장 스케줄러 비활성(외부 cron 사용) | - |
+| `SHORTS_DELEGATE_ASSEMBLY` | 선택 | `1`이면 FFmpeg 없을 때 원격 조립 큐(`pending_assembly`) 사용 | - |
+| `SHORTS_DISABLE_REMOTE_ASSEMBLY` | 선택 | `1`이면 원격 조립 비활성 | - |
+| `SHORTS_WORKER_SECRET` | 선택 | 배포 큐 처리·원격 조립 API용 헤더 `X-Shorts-Worker-Secret` | 워커 엔드포인트 거부 |
+| `YOUTUBE_UPLOAD_PRIVACY` | 선택 | `private` / `unlisted` / `public` | 기본 `private` |
+| `YOUTUBE_POLL_PROCESSING` | 선택 | `0`이면 업로드 후 YouTube 처리 폴링 안 함 | 기본 폴링 |
+| `YOUTUBE_OAUTH_STATE_SECRET` 또는 `CONNECTION_PIN_SECRET` | **Vercel/프로덕션 필수** | OAuth `state` HMAC에 Supabase `auth.users.id` 포함 | 없으면 토큰이 placeholder `user_id`에만 저장되어 연동 UI가 항상 비어 있음 |
+
+**원격 조립 워커(로컬/VPS)** 루트에서: `SHORTS_API_BASE`, `SHORTS_WORKER_SECRET`, Supabase 키 설정 후 `npm run shorts:assembly-worker` ([SHORTS_AGENT.md](./SHORTS_AGENT.md)).
+
+- `GET /api/shorts/health`는 `workerSecretConfigured`(서버에 `SHORTS_WORKER_SECRET` 비어 있지 않은지)를 반환합니다. 시크릿 값 자체는 노출되지 않습니다.
+- FFmpeg 포함 백엔드 컨테이너: 리포 루트에서 `docker build -f backend/Dockerfile .`
 
 ### 2.2 Supabase
 
@@ -36,6 +49,8 @@
 
 마이그레이션 `youtube_oauth_store` 적용 후, 프로덕션(Vercel) 백엔드 환경에 **반드시** `SUPABASE_SERVICE_ROLE_KEY`를 넣어야 Shorts에서 Google OAuth 완료 시 refresh 토큰이 DB에 남습니다.
 
+연재 기능을 쓰려면 `content_series` / `content_episode` 마이그레이션을 적용하세요.
+
 ### 2.3 Google
 
 | 변수 | 필수/선택 | 사용처 | 없을 때 |
@@ -43,11 +58,14 @@
 | `GOOGLE_API_KEY` / `YOUTUBE_API_KEY` | 선택 | Shorts 트렌드 수집(YouTube 검색) | 트렌드 스텁 1건 반환 |
 | YouTube OAuth (클라이언트 ID/시크릿 등) | 선택 | Shorts 유튜브 업로드 | 업로드 시 스텁 URL 반환 |
 
-### 2.4 OpenAI
+### 2.4 Gemini & OpenAI
 
 | 변수 | 필수/선택 | 사용처 | 없을 때 |
 |------|-----------|--------|----------|
-| `OPENAI_API_KEY` | 선택 | Shorts 이미지(DALL·E), 기타 AI | 이미지 placeholder URL |
+| `GEMINI_API_KEY` | 선택 | **텍스트** LLM 우선: Shorts 스크립트(`shortsScriptAgent`)·전략 요약(`shortsStatsService`), Threads 카피, B2C 프로모션/리뷰 요약, 콘텐츠 자동화 등 | 해당 경로는 `OPENAI_API_KEY` 폴백 또는 규칙/스텁 |
+| `OPENAI_API_KEY` | 선택 | Shorts **장면 이미지**(DALL·E 전용), Gemini 없을 때 일부 텍스트 보조 | 이미지는 placeholder URL |
+
+**Vercel**: 백엔드(또는 풀스택) 프로젝트의 **Environment Variables**에 `GEMINI_API_KEY`를 넣은 뒤 **재배포**해야 런타임에 반영됩니다. (Preview/Production 각각 설정 가능)
 
 ### 2.5 제휴·콘텐츠
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Link2,
@@ -243,41 +243,57 @@ function YouTubeAccountsSection({ t }) {
   const [requestLoading, setRequestLoading] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    Promise.all([shortsApi.getYoutubeAccounts(), shortsApi.getChannelProfiles("youtube")])
-      .then(([accountsRes, profilesRes]) => {
+    return (async () => {
+      try {
+        const accountsRes = await shortsApi.getYoutubeAccounts();
+        const accounts = accountsRes?.accounts ?? [];
         setData({
-          accounts: accountsRes?.accounts ?? [],
+          accounts,
           suggestedNextKey: accountsRes?.suggestedNextKey ?? null,
           maxAccounts: accountsRes?.maxAccounts ?? 5,
         });
-        setProfiles(profilesRes?.profiles ?? {});
-      })
-      .catch(() => {
+        try {
+          const profilesRes = await shortsApi.getChannelProfiles("youtube");
+          setProfiles(profilesRes?.profiles ?? {});
+        } catch {
+          setProfiles({});
+        }
+        return accounts.length;
+      } catch (e) {
         setData({ accounts: [], suggestedNextKey: "default", maxAccounts: 5 });
         setProfiles({});
-      })
-      .finally(() => setLoading(false));
-  };
+        setError(getApiErrorMessage(e, t("settings.youtubeAccountsLoadError")));
+        return 0;
+      }
+    })().finally(() => setLoading(false));
+  }, [t]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   useEffect(() => {
     const youtube = searchParams.get("youtube");
     const msg = searchParams.get("message");
     if (youtube === "connected") {
-      setMessage({ type: "success", text: t("settings.youtubeConnected") });
       setSearchParams({}, { replace: true });
-      load();
+      setMessage({ type: "success", text: t("settings.youtubeConnected") });
+      void load().then((count) => {
+        if (count === 0) {
+          setMessage({
+            type: "error",
+            text: t("settings.youtubeConnectedNoAccountStored"),
+          });
+        }
+      });
     } else if (youtube === "error" && msg) {
       setMessage({ type: "error", text: decodeURIComponent(msg) });
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams, setSearchParams, t]);
+  }, [searchParams, setSearchParams, t, load]);
 
   const handleAddAccount = () => {
     const key = data.suggestedNextKey || "default";
@@ -370,8 +386,16 @@ function YouTubeAccountsSection({ t }) {
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : (
         <div className="space-y-2">
+          {data.accounts.length > 0 ? (
+            <p className="text-sm font-medium text-primary">
+              {t("settings.youtubeSummaryConnected", { count: data.accounts.length })}
+            </p>
+          ) : null}
           {data.accounts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("settings.notConnected")}</p>
+            <div className="space-y-2 rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
+              <p className="text-sm text-muted-foreground">{t("settings.notConnected")}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">{t("settings.youtubeManualConnectHint")}</p>
+            </div>
           ) : (
             data.accounts.map((acc) => (
               <ChannelAccountRow

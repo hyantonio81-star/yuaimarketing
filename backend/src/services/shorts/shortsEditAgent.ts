@@ -2,16 +2,37 @@
  * Shorts 편집/조립 에이전트: 이미지 + TTS + BGM → mp4
  * FFmpeg 사용. 미설치 시 스텁 경로 반환.
  */
-import { exec, execSync } from "child_process";
+import { exec } from "child_process";
 import { promisify } from "util";
+import { existsSync } from "node:fs";
 import { mkdtemp, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import type { ShortsScript } from "./shortsTypes.js";
 import type { SceneImageResult } from "./shortsTypes.js";
 import type { SceneAudioResult } from "./shortsTypes.js";
+import { ffmpegShellPrefix, ffmpegExecOptions, isFfmpegAvailable } from "./shortsFfmpegPath.js";
 
 const execAsync = promisify(exec);
+
+const ff = () => ffmpegShellPrefix();
+
+/** FFmpeg 미사용·오류 시에도 copy/upload 단계가 ENOENT로 죽지 않도록 최소 바이트 파일 생성 */
+export const SHORTS_STUB_VIDEO_BYTES = 2048;
+
+async function writeStubVideoAssets(
+  workDir: string,
+  durationSeconds: number
+): Promise<AssembleResult> {
+  const videoPath = join(workDir, "stub.mp4");
+  const thumbnailPath = join(workDir, "stub-thumb.jpg");
+  await writeFile(videoPath, Buffer.alloc(SHORTS_STUB_VIDEO_BYTES, 0));
+  await writeFile(thumbnailPath, Buffer.alloc(32, 0));
+  if (!existsSync(videoPath)) {
+    throw new Error(`Shorts stub video was not written: ${videoPath}`);
+  }
+  return { videoPath, thumbnailPath, durationSeconds, fromStub: true };
+}
 
 export interface AssembleInput {
   script: ShortsScript;
@@ -27,15 +48,6 @@ export interface AssembleResult {
   thumbnailPath: string;
   durationSeconds: number;
   fromStub: boolean;
-}
-
-function getFfmpegPath(): string | null {
-  try {
-    execSync("ffmpeg -version", { stdio: "ignore" });
-    return "ffmpeg";
-  } catch {
-    return null;
-  }
 }
 
 /** 이미지 URL을 임시 파일로 다운로드 */
@@ -55,13 +67,8 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
   const durationSeconds = script.totalDurationSeconds;
   const workDir = await mkdtemp(join(tmpdir(), "shorts-edit-"));
 
-  if (!getFfmpegPath()) {
-    return {
-      videoPath: join(workDir, "stub.mp4"),
-      thumbnailPath: join(workDir, "stub-thumb.jpg"),
-      durationSeconds,
-      fromStub: true,
-    };
+  if (!isFfmpegAvailable()) {
+    return writeStubVideoAssets(workDir, durationSeconds);
   }
 
   try {
@@ -78,12 +85,7 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
     }
 
     if (imagePaths.length === 0) {
-      return {
-        videoPath: join(workDir, "stub.mp4"),
-        thumbnailPath: join(workDir, "stub-thumb.jpg"),
-        durationSeconds,
-        fromStub: true,
-      };
+      return writeStubVideoAssets(workDir, durationSeconds);
     }
 
     // --- 영상 클립 생성 (Ken Burns 효과 + 동적 자막 포함) ---
@@ -103,8 +105,8 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
       const filterComplex = `${zoomFilter},${captionFilter}`;
 
       await execAsync(
-        `ffmpeg -y -loop 1 -i "${imagePaths[i]}" -t ${dur} -vf "${filterComplex}" -r 30 -pix_fmt yuv420p -c:v libx264 "${clipPath}"`,
-        { timeout: 60000 }
+        `${ff()} -y -loop 1 -i "${imagePaths[i]}" -t ${dur} -vf "${filterComplex}" -r 30 -pix_fmt yuv420p -c:v libx264 "${clipPath}"`,
+        ffmpegExecOptions({ timeout: 60000 })
       );
       clipPaths.push(clipPath);
     }
@@ -116,8 +118,8 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
 
     const videoOnlyPath = join(workDir, "video.mp4");
     await execAsync(
-      `ffmpeg -y -f concat -safe 0 -i "${listPath}" -c copy "${videoOnlyPath}"`,
-      { timeout: 60000 }
+      `${ff()} -y -f concat -safe 0 -i "${listPath}" -c copy "${videoOnlyPath}"`,
+      ffmpegExecOptions({ timeout: 60000 })
     );
 
     // --- 오디오 처리 ---
@@ -132,16 +134,16 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
       await writeFile(concatListPath, concatList);
       const voicePath = join(workDir, "voice.mp3");
       await execAsync(
-        `ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${voicePath}"`,
-        { timeout: 30000 }
+        `${ff()} -y -f concat -safe 0 -i "${concatListPath}" -c copy "${voicePath}"`,
+        ffmpegExecOptions({ timeout: 30000 })
       );
 
       if (bgmPath) {
         finalAudioPath = join(workDir, "mixed.mp3");
         const vol = Math.max(0.05, Math.min(0.5, bgmVolume));
         await execAsync(
-          `ffmpeg -y -i "${voicePath}" -i "${bgmPath}" -filter_complex "[0]volume=1[a];[1]volume=${vol},atrim=0:${durationSeconds}[b];[a][b]amix=inputs=2:duration=first" -t ${durationSeconds} "${finalAudioPath}"`,
-          { timeout: 30000 }
+          `${ff()} -y -i "${voicePath}" -i "${bgmPath}" -filter_complex "[0]volume=1[a];[1]volume=${vol},atrim=0:${durationSeconds}[b];[a][b]amix=inputs=2:duration=first" -t ${durationSeconds} "${finalAudioPath}"`,
+          ffmpegExecOptions({ timeout: 30000 })
         );
       } else {
         finalAudioPath = voicePath;
@@ -150,8 +152,8 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
       if (bgmPath) {
         finalAudioPath = join(workDir, "bgm_only.mp3");
         await execAsync(
-          `ffmpeg -y -i "${bgmPath}" -t ${durationSeconds} "${finalAudioPath}"`,
-          { timeout: 15000 }
+          `${ff()} -y -i "${bgmPath}" -t ${durationSeconds} "${finalAudioPath}"`,
+          ffmpegExecOptions({ timeout: 15000 })
         );
       } else {
         finalAudioPath = "";
@@ -185,14 +187,14 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
         overlayFilter += `,overlay=x=W-250:y=H-650:enable='between(t,${displayTimingSeconds},${durationSeconds})'`;
         
         await execAsync(
-          `ffmpeg -y -i "${videoOnlyPath}" -i "${qrPath}" -filter_complex "[0]${overlayFilter}[out]" -map "[out]" -map 0:a? -c:v libx264 -c:a copy "${overlayPath}"`,
-          { timeout: 60000 }
+          `${ff()} -y -i "${videoOnlyPath}" -i "${qrPath}" -filter_complex "[0]${overlayFilter}[out]" -map "[out]" -map 0:a? -c:v libx264 -c:a copy "${overlayPath}"`,
+          ffmpegExecOptions({ timeout: 60000 })
         );
       } catch (qrErr) {
         console.warn("[QR Overlay Error] Skipping QR code:", qrErr);
         await execAsync(
-          `ffmpeg -y -i "${videoOnlyPath}" -vf "${overlayFilter}" -c:v libx264 -c:a copy "${overlayPath}"`,
-          { timeout: 60000 }
+          `${ff()} -y -i "${videoOnlyPath}" -vf "${overlayFilter}" -c:v libx264 -c:a copy "${overlayPath}"`,
+          ffmpegExecOptions({ timeout: 60000 })
         );
       }
       videoFinalPath = overlayPath;
@@ -200,17 +202,20 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
 
     if (finalAudioPath) {
       await execAsync(
-        `ffmpeg -y -i "${videoFinalPath}" -i "${finalAudioPath}" -vf "fade=t=in:st=0:d=1,fade=t=out:st=${durationSeconds - 1}:d=1" -c:v libx264 -c:a aac -shortest "${videoPath}"`,
-        { timeout: 60000 }
+        `${ff()} -y -i "${videoFinalPath}" -i "${finalAudioPath}" -vf "fade=t=in:st=0:d=1,fade=t=out:st=${durationSeconds - 1}:d=1" -c:v libx264 -c:a aac -shortest "${videoPath}"`,
+        ffmpegExecOptions({ timeout: 60000 })
       );
     } else {
-      await execAsync(`ffmpeg -y -i "${videoFinalPath}" -vf "fade=t=in:st=0:d=1,fade=t=out:st=${durationSeconds - 1}:d=1" -c:v libx264 -c:a aac "${videoPath}"`, { timeout: 30000 });
+      await execAsync(
+        `${ff()} -y -i "${videoFinalPath}" -vf "fade=t=in:st=0:d=1,fade=t=out:st=${durationSeconds - 1}:d=1" -c:v libx264 -c:a aac "${videoPath}"`,
+        ffmpegExecOptions({ timeout: 30000 })
+      );
     }
 
     const thumbnailPath = join(workDir, "thumb.jpg");
     await execAsync(
-      `ffmpeg -y -i "${videoPath}" -vframes 1 -f image2 "${thumbnailPath}"`,
-      { timeout: 10000 }
+      `${ff()} -y -i "${videoPath}" -vframes 1 -f image2 "${thumbnailPath}"`,
+      ffmpegExecOptions({ timeout: 10000 })
     );
 
     return {
@@ -221,11 +226,6 @@ export async function assembleVideo(input: AssembleInput): Promise<AssembleResul
     };
   } catch (e) {
     console.error("[Assemble Error]", e);
-    return {
-      videoPath: join(workDir, "stub.mp4"),
-      thumbnailPath: join(workDir, "stub-thumb.jpg"),
-      durationSeconds,
-      fromStub: true,
-    };
+    return writeStubVideoAssets(workDir, durationSeconds);
   }
 }

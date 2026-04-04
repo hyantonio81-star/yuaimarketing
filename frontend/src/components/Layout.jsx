@@ -8,6 +8,7 @@ import {
   Store,
   FileCheck,
   Video,
+  BookOpen,
   Crosshair,
   Search,
   Globe,
@@ -58,6 +59,7 @@ const navGroups = [
         children: [{ to: "/seo/threads-commerce", key: "nav.threadsCommerce", icon: null }],
       },
       { to: "/shorts", key: "nav.shortsAgent", icon: Video },
+      { to: "/shorts/serial", key: "nav.serialProjects", icon: BookOpen },
     ],
   },
   {

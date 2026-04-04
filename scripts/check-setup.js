@@ -3,7 +3,7 @@
  * Nexus AI 실행 전 환경·의존성 간단 점검
  * 사용: node scripts/check-setup.js (nexus-ai 폴더에서)
  */
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import { readFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -24,15 +24,41 @@ if (major >= 18 && major <= 20) {
   checks.push({ name: "Node.js", ok: false, detail: `${nodeVersion} — 18.x~20.x 권장` });
 }
 
-// FFmpeg
-try {
-  execSync("ffmpeg -version", { stdio: "pipe", encoding: "utf-8" });
-  checks.push({ name: "FFmpeg", ok: true, detail: "설치됨 (Shorts 영상 조립 가능)" });
-} catch {
+// FFmpeg (backend/.env 의 FFMPEG_PATH 반영)
+let beForFfmpeg = "";
+if (existsSync(backendEnvPath)) {
+  try {
+    beForFfmpeg = readFileSync(backendEnvPath, "utf-8");
+  } catch {
+    beForFfmpeg = "";
+  }
+}
+const ffmM = beForFfmpeg.match(/^\s*FFMPEG_PATH\s*=\s*(.+)$/m);
+if (ffmM) {
+  process.env.FFMPEG_PATH = ffmM[1].trim().replace(/^["']|["']$/g, "");
+}
+const ffmpegExe = (process.env.FFMPEG_PATH || "").trim() || "ffmpeg";
+const ffmOk =
+  spawnSync(ffmpegExe, ["-version"], {
+    stdio: "pipe",
+    encoding: "utf-8",
+    shell: process.platform === "win32",
+  }).status === 0;
+if (ffmOk) {
+  checks.push({
+    name: "FFmpeg",
+    ok: true,
+    detail:
+      ffmpegExe === "ffmpeg"
+        ? "설치됨 (PATH, Shorts 영상 조립 가능)"
+        : `설치됨 (${ffmpegExe})`,
+  });
+} else {
   checks.push({
     name: "FFmpeg",
     ok: false,
-    detail: "미설치 — docs/FFMPEG_SETUP.md 참고 (Shorts 편집은 스텁 반환)",
+    detail:
+      "미설치 — docs/FFMPEG_SETUP.md · scripts/install-ffmpeg-windows.ps1 또는 FFMPEG_PATH 설정",
   });
 }
 

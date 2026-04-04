@@ -68,9 +68,40 @@ export interface ShortsScript {
   };
 }
 
+/** 원격 FFmpeg 워커가 사용하는 조립 매니페스트 (스토리지 URL만 포함) */
+export interface RemoteAssemblyManifest {
+  schemaVersion: 1;
+  sceneImageUrls: { sceneIndex: number; imageUrl: string }[];
+  sceneAudioUrls: { sceneIndex: number; audioUrl: string }[];
+  bgmUrl?: string;
+  bgmVolume: number;
+  script: ShortsScript;
+}
+
+/** 원격 조립 완료 후 이어질 업로드 옵션 */
+export interface AssemblyFollowup {
+  uploadMode: "review_first" | "immediate";
+  platforms: ("youtube" | "tiktok" | "instagram" | "facebook")[];
+  youtubeKey: string;
+  ownerUserId: string;
+}
+
 export interface ShortsPipelineJob {
   jobId: string;
-  status: "pending" | "collecting" | "script" | "images" | "voice" | "video" | "video_ready" | "upload" | "done" | "failed" | "reviewing" | "queued";
+  status:
+    | "pending"
+    | "collecting"
+    | "script"
+    | "images"
+    | "voice"
+    | "video"
+    | "pending_assembly"
+    | "video_ready"
+    | "upload"
+    | "done"
+    | "failed"
+    | "reviewing"
+    | "queued";
   topic?: TrendTopic;
   script?: ShortsScript;
   videoUrl?: string;
@@ -89,6 +120,19 @@ export interface ShortsPipelineJob {
   error?: string;
   /** 파이프라인을 시작한 Supabase 사용자 (YouTube 토큰·배포 시 사용) */
   ownerUserId?: string;
+  /** FFmpeg 없음·조립 실패 시 생성된 더미 파일 (실제 Shorts mp4 아님) */
+  videoStub?: boolean;
+  /** 원격 조립 큐 상태 */
+  assemblyStatus?: "none" | "queued" | "processing" | "complete" | "failed";
+  assemblyError?: string;
+  assemblyManifest?: RemoteAssemblyManifest;
+  assemblyFollowup?: AssemblyFollowup;
+  /** YouTube 업로드 후 Data API 처리 상태(폴링) */
+  youtubeVideoId?: string;
+  youtubeProcessingStatus?: "uploaded" | "processing" | "succeeded" | "failed";
+  youtubeProcessingDetail?: string;
+  /** 업로드 시 YouTube 프리셋 (롱폼 vs Shorts 링크·태그) */
+  pipelineFormat?: "shorts" | "long";
   createdAt: string;
   updatedAt: string;
 }

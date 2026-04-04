@@ -22,8 +22,10 @@
     "start": "npm run build && npm run start:server",
     "start:server": "node scripts/start-server.js",
     "check-setup": "node scripts/check-setup.js",
+    "ffmpeg:install-win": "powershell -ExecutionPolicy Bypass -File scripts/install-ffmpeg-windows.ps1",
     "vercel:set-root": "node scripts/vercel-set-root.js",
-    "supabase:db-push": "node scripts/supabase-db-push.mjs"
+    "supabase:db-push": "node scripts/supabase-db-push.mjs",
+    "shorts:assembly-worker": "node scripts/shorts-assembly-worker.mjs"
   },
   "devDependencies": {
     "@vercel/node": "^3.2.0",

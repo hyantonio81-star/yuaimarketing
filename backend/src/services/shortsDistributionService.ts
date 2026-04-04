@@ -1,7 +1,11 @@
 import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 import type { DistributionQueueItem, ShortsPipelineJob } from "./shorts/shortsTypes.js";
 import { getJobAsync, persistJobs } from "./shortsAgentService.js";
-import { deployToPlatforms, type DeployPlatform } from "./shorts/shortsDeployAgent.js";
+import {
+  deployToPlatforms,
+  deployToPlatformsFromRemoteUrl,
+  type DeployPlatform,
+} from "./shorts/shortsDeployAgent.js";
 import { YOUTUBE_LEGACY_USER_SENTINEL } from "./youtubeUploadService.js";
 
 const QUEUE_TABLE = "shorts_distribution_queue";
@@ -171,16 +175,17 @@ export async function processDistributionQueue(opts: { limit?: number } = {}): P
           : "default";
       const ownerId = (job.ownerUserId ?? "").trim() || YOUTUBE_LEGACY_USER_SENTINEL;
 
-      const { results, errors } = await deployToPlatforms(
-        videoSource!,
-        {
-          title: item.metadata?.title || job.script?.topicTitle || "AI Content",
-          description: item.metadata?.description || job.script?.hook || "",
-        },
-        [item.platform as DeployPlatform],
-        ytKey,
-        ownerId
-      );
+      const ytPreset = job.pipelineFormat === "long" ? "long" : "shorts";
+      const meta = {
+        title: item.metadata?.title || job.script?.topicTitle || "AI Content",
+        description: item.metadata?.description || job.script?.hook || "",
+      };
+      const platforms = [item.platform as DeployPlatform];
+      const isRemote =
+        videoSource!.startsWith("http://") || videoSource!.startsWith("https://");
+      const { results, errors } = isRemote
+        ? await deployToPlatformsFromRemoteUrl(videoSource!, meta, platforms, ytKey, ownerId, ytPreset)
+        : await deployToPlatforms(videoSource!, meta, platforms, ytKey, ownerId, ytPreset);
 
       const result = (results as any)[item.platform];
       const platformError = (errors as any)[item.platform];

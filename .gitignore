@@ -17,3 +17,5 @@ yarn.lock
 
 # 로컬 Shorts job 큐 스냅샷(런타임 변동 — 커밋 제외)
 backend/data/shorts_jobs.json
+# 루트 SHORTS_STORAGE_PATH 등 로컬 데이터
+/data/

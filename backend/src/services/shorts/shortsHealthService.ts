@@ -1,13 +1,5 @@
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
-
-const execAsync = promisify(exec);
+import { isFfmpegAvailable } from "./shortsFfmpegPath.js";
 
 export async function checkFfmpegInstalled(): Promise<boolean> {
-  try {
-    await execAsync("ffmpeg -version");
-    return true;
-  } catch {
-    return false;
-  }
+  return isFfmpegAvailable();
 }

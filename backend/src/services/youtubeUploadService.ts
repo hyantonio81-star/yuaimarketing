@@ -15,6 +15,49 @@ import { getSupabaseAdmin } from "../lib/supabaseServer.js";
 const SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.force-ssl"];
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos";
+const VIDEOS_LIST_URL = "https://www.googleapis.com/youtube/v3/videos";
+
+export type YoutubeUploadPreset = "shorts" | "long";
+
+function defaultPrivacy(): "private" | "unlisted" | "public" {
+  const p = (process.env.YOUTUBE_UPLOAD_PRIVACY ?? "private").trim().toLowerCase();
+  if (p === "public" || p === "unlisted") return p;
+  return "private";
+}
+
+async function pollYoutubeProcessingStatus(
+  videoId: string,
+  accessToken: string
+): Promise<{ status: "succeeded" | "processing" | "failed"; detail?: string }> {
+  const maxAttempts = 10;
+  const delayMs = 2500;
+  for (let i = 0; i < maxAttempts; i++) {
+    const u = new URL(VIDEOS_LIST_URL);
+    u.searchParams.set("part", "status,processingDetails");
+    u.searchParams.set("id", videoId);
+    const r = await fetch(u.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+    const j = (await r.json().catch(() => ({}))) as {
+      items?: Array<{
+        status?: { uploadStatus?: string; failureReason?: string; privacyStatus?: string };
+        processingDetails?: { processingStatus?: string };
+      }>;
+    };
+    const item = j.items?.[0];
+    const uploadStatus = item?.status?.uploadStatus;
+    const proc = item?.processingDetails?.processingStatus;
+    if (uploadStatus === "processed") {
+      return { status: "succeeded" };
+    }
+    if (uploadStatus === "failed" || proc === "failed") {
+      return {
+        status: "failed",
+        detail: item?.status?.failureReason || "YouTube processing failed",
+      };
+    }
+    await new Promise((res) => setTimeout(res, delayMs));
+  }
+  return { status: "processing", detail: "Still processing (poll timeout)" };
+}
 const OAUTH_STATE_PREFIX = "v1";
 
 /** OAuth state에 userId 없을 때(레거시) DB·파일 공용 행 */
@@ -25,6 +68,26 @@ const YOUTUBE_OAUTH_TABLE = "youtube_oauth_store";
 function getOAuthStateSecret(): string {
   return (process.env.YOUTUBE_OAUTH_STATE_SECRET ?? process.env.CONNECTION_PIN_SECRET ?? "").trim();
 }
+
+function isYoutubeOAuthProduction(): boolean {
+  return process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
+}
+
+/**
+ * Vercel/프로덕션에서 state 서명 비밀이 없으면 OAuth state에 로그인 user id를 넣을 수 없고,
+ * 토큰이 레거시 sentinel 행에만 저장되어 목록 API는 항상 비어 보입니다.
+ */
+export function getYoutubeOAuthConfigError(): string | null {
+  if (!isYoutubeOAuthProduction()) return null;
+  if (!getOAuthStateSecret()) {
+    return "Set YOUTUBE_OAUTH_STATE_SECRET or CONNECTION_PIN_SECRET on the server. Required in production so tokens are saved to your logged-in user (not the legacy placeholder id).";
+  }
+  return null;
+}
+
+export type YoutubeAuthUrlResult =
+  | { ok: true; url: string; state: string }
+  | { ok: false; error: string };
 
 /**
  * OAuth state 서명: v1:userId:accountKey:nonce:sig (userId = Supabase auth user uuid)
@@ -48,6 +111,7 @@ export function verifyYoutubeOAuthState(state: string): { userId: string; key: s
   if (!raw) return { userId: YOUTUBE_LEGACY_USER_SENTINEL, key: "default" };
 
   if (!secret) {
+    if (isYoutubeOAuthProduction()) return null;
     return { userId: YOUTUBE_LEGACY_USER_SENTINEL, key: raw || "default" };
   }
 
@@ -127,9 +191,12 @@ async function loadFromSupabase(userId: string, into: UserYoutubeStore): Promise
   }
 }
 
-async function saveToSupabase(userId: string, store: UserYoutubeStore): Promise<void> {
+/** @returns null = success, string = error message */
+async function saveToSupabase(userId: string, store: UserYoutubeStore): Promise<string | null> {
   const supabase = getSupabaseAdmin();
-  if (!supabase) return;
+  if (!supabase) {
+    return "Supabase admin not configured (check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the server)";
+  }
   const tokens: Record<string, PersistedTokens> = {};
   for (const [k, v] of store.tokens) {
     tokens[k] = { refresh_token: v.refresh_token };
@@ -139,10 +206,15 @@ async function saveToSupabase(userId: string, store: UserYoutubeStore): Promise<
     labels[k] = v;
   }
   const now = new Date().toISOString();
-  await supabase.from(YOUTUBE_OAUTH_TABLE).upsert(
+  const { error } = await supabase.from(YOUTUBE_OAUTH_TABLE).upsert(
     { user_id: userId, tokens, labels, updated_at: now },
     { onConflict: "user_id" }
   );
+  if (error) {
+    console.error("[youtube_oauth_store upsert]", error.message);
+    return error.message;
+  }
+  return null;
 }
 
 const TOKENS_FILENAME = "youtube-tokens.enc";
@@ -291,12 +363,20 @@ function getRedirectUri(): string {
 }
 
 /** OAuth 인증 URL */
-export function getAuthUrl(accountKey: string | undefined, userId: string): { url: string; state: string } | null {
+export function getAuthUrl(accountKey: string | undefined, userId: string): YoutubeAuthUrlResult {
   const clientId = getClientId();
-  if (!clientId) return null;
+  if (!clientId) return { ok: false, error: "YOUTUBE_CLIENT_ID not set" };
+
+  const cfgErr = getYoutubeOAuthConfigError();
+  if (cfgErr) return { ok: false, error: cfgErr };
+
+  const uidRaw = (userId ?? "").trim();
+  if (!uidRaw || uidRaw === YOUTUBE_LEGACY_USER_SENTINEL) {
+    return { ok: false, error: "Sign in first, then connect YouTube (session user id missing)." };
+  }
+
   const k = (accountKey ?? "default").trim() || "default";
-  const uid = normalizeUserId(userId);
-  const signedState = signYoutubeOAuthState(k, uid);
+  const signedState = signYoutubeOAuthState(k, uidRaw);
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: getRedirectUri(),
@@ -306,7 +386,7 @@ export function getAuthUrl(accountKey: string | undefined, userId: string): { ur
     prompt: "consent",
     state: signedState,
   });
-  return { url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`, state: signedState };
+  return { ok: true, url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`, state: signedState };
 }
 
 export async function exchangeCodeAndStore(
@@ -341,7 +421,11 @@ export async function exchangeCodeAndStore(
     access_token: data.access_token,
     expiry_ms: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
   });
-  await saveToSupabase(id, store);
+  const persistErr = await saveToSupabase(id, store);
+  if (persistErr) {
+    store.tokens.delete(k);
+    return { ok: false, error: `Could not save tokens to database: ${persistErr}` };
+  }
   await saveLegacyEncryptedFile(store).catch(() => {});
   return { ok: true };
 }
@@ -368,7 +452,8 @@ async function getAccessTokenForUser(key: string, userId: string): Promise<strin
   if (!res.ok) return null;
   stored.access_token = data.access_token;
   stored.expiry_ms = data.expires_in ? Date.now() + data.expires_in * 1000 : undefined;
-  await saveToSupabase(normalizeUserId(userId), store);
+  const persistErr = await saveToSupabase(normalizeUserId(userId), store);
+  if (persistErr) console.warn("[youtube] refreshed access token not persisted:", persistErr);
   return stored.access_token ?? null;
 }
 
@@ -385,9 +470,16 @@ export async function disconnect(key: string = "default", userId: string): Promi
   const id = normalizeUserId(userId);
   const store = await getYoutubeStore(id);
   const k = (key ?? "default").trim() || "default";
+  const prevTok = store.tokens.get(k);
+  const prevLab = store.labels.get(k);
   store.tokens.delete(k);
   store.labels.delete(k);
-  await saveToSupabase(id, store);
+  const persistErr = await saveToSupabase(id, store);
+  if (persistErr) {
+    if (prevTok) store.tokens.set(k, prevTok);
+    if (prevLab !== undefined) store.labels.set(k, prevLab);
+    throw new Error(persistErr);
+  }
   await saveLegacyEncryptedFile(store).catch(() => {});
 }
 
@@ -416,9 +508,16 @@ export async function setAccountLabel(key: string, label: string, userId: string
   if (!k) return;
   const id = normalizeUserId(userId);
   const store = await getYoutubeStore(id);
+  const hadLabel = store.labels.has(k);
+  const prevLabel = store.labels.get(k);
   if (label.trim()) store.labels.set(k, label.trim());
   else store.labels.delete(k);
-  await saveToSupabase(id, store);
+  const persistErr = await saveToSupabase(id, store);
+  if (persistErr) {
+    if (hadLabel && prevLabel !== undefined) store.labels.set(k, prevLabel);
+    else store.labels.delete(k);
+    throw new Error(persistErr);
+  }
   await saveLegacyEncryptedFile(store).catch(() => {});
 }
 
@@ -431,8 +530,18 @@ export async function uploadVideo(
   videoPath: string,
   meta: { title: string; description?: string },
   key: string = "default",
-  userId: string
-): Promise<{ videoId: string; url: string } | { error: string }> {
+  userId: string,
+  options?: { uploadPreset?: YoutubeUploadPreset; privacy?: "private" | "unlisted" | "public" }
+): Promise<
+  | {
+      videoId: string;
+      url: string;
+      youtubeProcessingStatus?: "processing" | "succeeded" | "failed";
+      youtubeProcessingDetail?: string;
+      uploadPreset?: YoutubeUploadPreset;
+    }
+  | { error: string }
+> {
   const accessToken = await getAccessTokenForUser(key, userId);
   if (!accessToken) return { error: "YouTube account not connected or token expired" };
 
@@ -440,20 +549,37 @@ export async function uploadVideo(
   if (!fs) return { error: "fs not available" };
   let fileBuffer: Buffer;
   try {
-    fileBuffer = await fs.readFile(videoPath);
+    const p = videoPath.trim();
+    if (p.startsWith("http://") || p.startsWith("https://")) {
+      const res = await fetch(p);
+      if (!res.ok) return { error: `Video URL fetch failed: ${res.status}` };
+      fileBuffer = Buffer.from(await res.arrayBuffer());
+    } else {
+      fileBuffer = await fs.readFile(p);
+    }
   } catch {
     return { error: "Video file not found or not generated (pipeline stub)" };
   }
   if (fileBuffer.length < 1000) return { error: "Video file too small (pipeline stub)" };
 
+  const preset: YoutubeUploadPreset = options?.uploadPreset === "long" ? "long" : "shorts";
+  const privacy = options?.privacy ?? defaultPrivacy();
   const boundary = "-------shorts-upload-boundary";
-  const snippet = {
-    title: meta.title.slice(0, 100),
-    description: (meta.description ?? "").slice(0, 5000),
-    categoryId: "22",
-    tags: ["shorts", "short"],
-  };
-  const bodyBuffer: Buffer = buildMultipartBody(boundary, snippet, fileBuffer);
+  const snippet =
+    preset === "long"
+      ? {
+          title: meta.title.slice(0, 100),
+          description: (meta.description ?? "").slice(0, 5000),
+          categoryId: "24",
+          tags: ["long form", "video"],
+        }
+      : {
+          title: meta.title.slice(0, 100),
+          description: (meta.description ?? "").slice(0, 5000),
+          categoryId: "22",
+          tags: ["shorts", "short"],
+        };
+  const bodyBuffer: Buffer = buildMultipartBody(boundary, snippet, fileBuffer, privacy);
   const bodyInit: BodyInit = new Uint8Array(bodyBuffer);
 
   const res = await fetch(`${UPLOAD_URL}?part=snippet,status&uploadType=multipart`, {
@@ -469,17 +595,40 @@ export async function uploadVideo(
   if (!res.ok) return { error: data.error?.message || data.error?.errors?.[0]?.message || "Upload failed" };
   const id = data.id;
   if (!id) return { error: "No video id in response" };
-  return { videoId: id, url: `https://www.youtube.com/shorts/${id}` };
+
+  const pollEnabled = (process.env.YOUTUBE_POLL_PROCESSING ?? "1").trim() !== "0";
+  let youtubeProcessingStatus: "processing" | "succeeded" | "failed" | undefined;
+  let youtubeProcessingDetail: string | undefined;
+  if (pollEnabled) {
+    const pr = await pollYoutubeProcessingStatus(id, accessToken);
+    youtubeProcessingStatus = pr.status;
+    youtubeProcessingDetail = pr.detail;
+  }
+
+  const url =
+    preset === "long" ? `https://www.youtube.com/watch?v=${id}` : `https://www.youtube.com/shorts/${id}`;
+  return {
+    videoId: id,
+    url,
+    youtubeProcessingStatus,
+    youtubeProcessingDetail,
+    uploadPreset: preset,
+  };
 }
 
-function buildMultipartBody(boundary: string, snippet: object, fileBuffer: Buffer): Buffer {
+function buildMultipartBody(
+  boundary: string,
+  snippet: { title: string; description: string; categoryId: string; tags: string[] },
+  fileBuffer: Buffer,
+  privacy: "private" | "unlisted" | "public"
+): Buffer {
   const metaPart = [
     `--${boundary}`,
     "Content-Type: application/json; charset=UTF-8",
     "",
     JSON.stringify({
-      snippet: { ...snippet, categoryId: "22" },
-      status: { privacyStatus: "private", selfDeclaredMadeForKids: false },
+      snippet: { ...snippet },
+      status: { privacyStatus: privacy, selfDeclaredMadeForKids: false },
     }),
   ].join("\r\n");
   const mediaPart = [

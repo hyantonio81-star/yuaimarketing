@@ -13,6 +13,7 @@ import B2CCommerce from "./pages/B2CCommerce";
 import Ecommerce from "./pages/Ecommerce";
 import GovTender from "./pages/GovTender";
 import ShortsAgent from "./pages/ShortsAgent";
+import SerialProjectsPage from "./pages/SerialProjectsPage";
 import Links from "./pages/Links";
 import Landing from "./pages/Landing";
 import SettingsAccount from "./pages/SettingsAccount";
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="b2c" element={<B2CCommerce />} />
         <Route path="b2c/ecommerce" element={<Ecommerce />} />
         <Route path="gov" element={<GovTender />} />
+        <Route path="shorts/serial" element={<SerialProjectsPage />} />
         <Route path="shorts" element={<ShortsAgent />} />
         <Route path="settings" element={<Navigate to="/settings/account" replace />} />
         <Route path="settings/account" element={<SettingsAccount />} />

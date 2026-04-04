@@ -18,6 +18,10 @@
     }
   ],
   "functions": {
+    "api/health.js": {
+      "maxDuration": 10,
+      "includeFiles": "backend/dist/**"
+    },
     "api/[...path].ts": {
       "maxDuration": 30,
       "includeFiles": "backend/dist/**"

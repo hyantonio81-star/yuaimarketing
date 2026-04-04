@@ -162,18 +162,18 @@ export default function SeoThreadsCommerce() {
 
       {!connection.connected && (
         <div className="mb-6 rounded-lg border border-border bg-muted/20 px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">시작하기(필수 설정)</p>
+          <p className="text-sm font-semibold text-foreground">{t("seoContent.threadsCommerceSetupTitle")}</p>
           <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
-            <li>연동 관리(`/settings/connections`)에서 Threads 토큰을 준비합니다.</li>
-            <li>이 화면에서 토큰/표시 이름을 입력하고 “연결”을 완료합니다.</li>
-            <li>설정(랜딩/카테고리/언어) 저장 후 “실행”으로 첫 스레드 발행을 테스트합니다.</li>
+            <li>{t("seoContent.threadsCommerceSetupStep1")}</li>
+            <li>{t("seoContent.threadsCommerceSetupStep2")}</li>
+            <li>{t("seoContent.threadsCommerceSetupStep3")}</li>
           </ol>
           <div className="mt-3">
             <Link
               to="/settings/connections"
               className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
-              연동 관리로 이동
+              {t("seoContent.threadsCommerceSetupConnectionsCta")}
             </Link>
           </div>
         </div>
