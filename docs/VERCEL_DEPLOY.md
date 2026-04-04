@@ -33,6 +33,8 @@ Vercel에서 **Root Directory**를 **`frontend`**로 설정한 경우입니다. 
 
 Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variables**에서 아래 변수를 추가하세요.
 
+**전체 목록(Shorts·원격 조립·YouTube OAuth 포함)** 은 [VERCEL_환경변수_목록.md](./VERCEL_환경변수_목록.md) 를 참고하세요.
+
 ### 프론트엔드 (빌드 시 사용)
 
 | 이름 | 값 | 비고 |
