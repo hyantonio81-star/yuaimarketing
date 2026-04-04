@@ -152,13 +152,17 @@ export default function ShortsAgent() {
 
   const handleAddToQueue = async () => {
     if (!selectedJobIds.length) return;
+    const n = selectedJobIds.length;
     setIsDistributing(true);
     try {
-      await shortsApi.addToDistributionQueue(selectedJobIds, distPlatforms);
+      await shortsApi.addToDistributionQueue(selectedJobIds, distPlatforms, {
+        youtubeKey: selectedYoutubeKey || "default",
+      });
       setSelectedJobIds([]);
       loadJobs();
       loadQueue();
-      alert(t("shortsAgent.alertQueueAdded", { count: selectedJobIds.length }));
+      loadBufferStatus();
+      alert(t("shortsAgent.alertQueueAdded", { count: n }));
     } catch (e) {
       alert(t("shortsAgent.alertQueueFailed", { error: e.message || t("common.error") }));
     } finally {
@@ -166,12 +170,20 @@ export default function ShortsAgent() {
     }
   };
 
+  const toggleFanoutAccountKey = (key) => {
+    setFanoutAccountKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
   const loadQueue = () => {
     setQueueLoading(true);
-    shortsApi.getDistributionQueue()
-      .then(d => setQueue(d?.queue ?? []))
+    shortsApi
+      .getDistributionQueue()
+      .then((d) => setQueue(d?.queue ?? []))
       .catch(() => setQueue([]))
       .finally(() => setQueueLoading(false));
+    loadBufferStatus();
   };
   const [trends, setTrends] = useState([]);
   const [trendsError, setTrendsError] = useState(null);
@@ -218,6 +230,9 @@ export default function ShortsAgent() {
   const [deployTarget, setDeployTarget] = useState("standard");
   const [remoteAssemblyEnabled, setRemoteAssemblyEnabled] = useState(false);
   const [workerSecretConfigured, setWorkerSecretConfigured] = useState(false);
+  const [bufferStatus, setBufferStatus] = useState(null);
+  const [fanoutLoading, setFanoutLoading] = useState(false);
+  const [fanoutAccountKeys, setFanoutAccountKeys] = useState([]);
   const [workflowOpen, setWorkflowOpen] = useState(false);
 
   const ensureVideoUrl = (jobId) => {
@@ -257,6 +272,22 @@ export default function ShortsAgent() {
     }
   }, [searchParams, setSearchParams, t]);
 
+  const loadBufferStatus = () => {
+    shortsApi.getBufferStatus().then((d) => setBufferStatus(d)).catch(() => setBufferStatus(null));
+  };
+
+  useEffect(() => {
+    if (youtubeAccounts.length >= 2) {
+      setFanoutAccountKeys((prev) => {
+        const keys = youtubeAccounts.map((a) => a.key);
+        const next = prev.filter((k) => keys.includes(k));
+        return next.length ? next : keys;
+      });
+    } else {
+      setFanoutAccountKeys([]);
+    }
+  }, [youtubeAccounts]);
+
   useEffect(() => {
     shortsApi.getYoutubeAccounts().then((d) => {
       const list = d?.accounts ?? [];
@@ -292,6 +323,7 @@ export default function ShortsAgent() {
         setRemoteAssemblyEnabled(false);
         setWorkerSecretConfigured(false);
       });
+    loadBufferStatus();
   }, []);
 
   /** 선택한 계정의 세부옵션 로드 (계정 변경 시 자동 + 불러오기 버튼) */
@@ -480,6 +512,7 @@ export default function ShortsAgent() {
         bgmMood: noBgm ? undefined : undefined,
         bgmVolume: noBgm ? undefined : bgmVolume,
         platforms: platforms.length ? platforms : ["youtube"],
+        languageOverride: contentLanguage,
       });
       setRunResult(data);
       // 작업 목록 즉시 갱신 (pending 상태인 새 작업이 나타남)
@@ -488,6 +521,49 @@ export default function ShortsAgent() {
       setRunError(e?.response?.data?.error || e?.message || t("shortsAgent.errPipelineRun"));
     } finally {
       setRunLoading(false);
+    }
+  };
+
+  const handleFanoutPipeline = async () => {
+    if (fanoutAccountKeys.length < 2) {
+      alert(t("shortsAgent.fanoutNeedTwo"));
+      return;
+    }
+    setFanoutLoading(true);
+    setRunError(null);
+    setRunResult(null);
+    try {
+      const runFormat = format === "shorts_20" ? "shorts" : format;
+      const runTargetSec = format === "shorts_20" ? 20 : format === "long" ? targetDurationSeconds : undefined;
+      const targets = fanoutAccountKeys.map((k) => ({ youtubeKey: k }));
+      const data = await shortsApi.runFanout(keywordList.length ? keywordList : undefined, targets, {
+        avatarPresetId: avatarPresetId || undefined,
+        enableTts,
+        noBgm,
+        voiceGender,
+        voiceAge,
+        voiceTone,
+        voiceSpeed,
+        voicePitch: "medium",
+        format: runFormat,
+        targetDurationSeconds: runTargetSec,
+        uploadMode: uploadMode === "review_first" ? "review_first" : "immediate",
+        characterAge,
+        characterGender,
+        bgmGenre: noBgm ? undefined : bgmGenre,
+        bgmMood: noBgm ? undefined : undefined,
+        bgmVolume: noBgm ? undefined : bgmVolume,
+        platforms: platforms.length ? platforms : ["youtube"],
+        languageOverride: contentLanguage,
+      });
+      const jobs = data?.jobs ?? [];
+      if (jobs.length) setRunResult(jobs[jobs.length - 1]);
+      loadJobs();
+      loadBufferStatus();
+    } catch (e) {
+      setRunError(e?.response?.data?.error || e?.message || t("shortsAgent.errPipelineRun"));
+    } finally {
+      setFanoutLoading(false);
     }
   };
 
@@ -695,6 +771,15 @@ export default function ShortsAgent() {
                   )}
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium">
                     <a
+                      href={publicDocHref("SHORTS_PRODUCTION_E2E.md")}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-amber-900 dark:text-amber-100 hover:underline"
+                    >
+                      {t("shortsAgent.productionE2eDoc")}
+                      <ExternalLink className="w-3 h-3 shrink-0" />
+                    </a>
+                    <a
                       href={publicDocHref("SHORTS_REMOTE_ASSEMBLY.md")}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -797,6 +882,7 @@ export default function ShortsAgent() {
 
       <SectionCard title={t("shortsAgent.defaultsTitle")} className="mb-6">
         <p className="text-sm text-muted-foreground mb-3">{t("shortsAgent.defaultsDesc")}</p>
+        <p className="text-xs text-muted-foreground mb-3">{t("shortsAgent.channelLanguageNote")}</p>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -877,6 +963,49 @@ export default function ShortsAgent() {
             {runLoading ? t("common.loading") : t("shortsAgent.runPipeline")}
           </button>
         </div>
+        <div className="flex flex-wrap items-end gap-4 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">{t("shortsAgent.outputLanguageMain")}</label>
+            <select
+              value={contentLanguage}
+              onChange={(e) => setContentLanguage(e.target.value)}
+              className="rounded border border-border bg-background px-3 py-2 text-sm text-foreground min-w-[140px]"
+            >
+              <option value="ko">{t("shortsAgent.langKo")}</option>
+              <option value="en">{t("shortsAgent.langEn")}</option>
+              <option value="es">{t("shortsAgent.langEs")}</option>
+              <option value="es-DO">{t("shortsAgent.langEsDO")}</option>
+              <option value="pt-BR">{t("shortsAgent.langPtBR")}</option>
+            </select>
+          </div>
+          {youtubeAccounts.length >= 2 ? (
+            <div className="flex flex-col gap-2 min-w-[220px]">
+              <span className="text-xs font-medium text-muted-foreground">{t("shortsAgent.fanoutMultiAccount")}</span>
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                {youtubeAccounts.map((acc) => (
+                  <label key={acc.key} className="flex items-center gap-1.5 text-sm cursor-pointer text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={fanoutAccountKeys.includes(acc.key)}
+                      onChange={() => toggleFanoutAccountKey(acc.key)}
+                      className="rounded border-border"
+                    />
+                    <span>{acc.label || acc.key}</span>
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleFanoutPipeline}
+                disabled={fanoutLoading || fanoutAccountKeys.length < 2}
+                className="inline-flex items-center gap-2 rounded border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60 disabled:opacity-50 w-fit"
+              >
+                <Play className="w-3.5 h-3.5" />
+                {fanoutLoading ? t("common.loading") : t("shortsAgent.fanoutRun")}
+              </button>
+            </div>
+          ) : null}
+        </div>
         <div className="flex flex-wrap items-center gap-3 mt-3">
           <span className="text-xs font-medium text-muted-foreground">{t("shortsAgent.deployPlatforms")}</span>
           {(availablePlatforms || []).map((p) => (
@@ -938,16 +1067,6 @@ export default function ShortsAgent() {
               <div>
                 <p className="font-medium text-foreground mb-2 flex items-center gap-1.5"><Clock className="w-4 h-4" /> {t("shortsAgent.formatOptions")}</p>
                 <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-muted-foreground w-20">{t("shortsAgent.contentLanguage")}</span>
-                    <select value={contentLanguage} onChange={(e) => setContentLanguage(e.target.value)} className="rounded border border-border bg-background px-2 py-1 text-foreground">
-                      <option value="ko">{t("shortsAgent.langKo")}</option>
-                      <option value="en">{t("shortsAgent.langEn")}</option>
-                      <option value="es">{t("shortsAgent.langEs")}</option>
-                      <option value="es-DO">{t("shortsAgent.langEsDO")}</option>
-                      <option value="pt-BR">{t("shortsAgent.langPtBR")}</option>
-                    </select>
-                  </div>
                   <div className="flex flex-wrap gap-2 items-center">
                     <span className="text-muted-foreground w-20">{t("shortsAgent.uploadMode")}</span>
                     <select value={uploadMode} onChange={(e) => setUploadMode(e.target.value)} className="rounded border border-border bg-background px-2 py-1 text-foreground">
@@ -1463,6 +1582,16 @@ export default function ShortsAgent() {
                         </span>
                       </div>
                       <h4 className="font-semibold text-sm line-clamp-1">{job.topic?.title || t("shortsAgent.noTitle")}</h4>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {job.outputLanguage ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{job.outputLanguage}</span>
+                        ) : null}
+                        {job.parentJobId ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded border border-border text-muted-foreground" title={job.parentJobId}>
+                            {t("shortsAgent.parentJobBadge")}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="aspect-video rounded-lg bg-muted mb-3 flex items-center justify-center overflow-hidden border border-border group">
@@ -1523,6 +1652,29 @@ export default function ShortsAgent() {
               </button>
             </div>
 
+            {bufferStatus != null && typeof bufferStatus.count === "number" && (
+              <div className="mb-6 rounded-xl border border-border bg-muted/20 px-4 py-3 flex flex-wrap items-center gap-3">
+                <span className="text-sm font-medium text-foreground">{t("shortsAgent.bufferGaugeTitle")}</span>
+                <div className="flex-1 min-w-[120px] max-w-md h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{
+                      width: `${Math.min(100, (bufferStatus.count / Math.max(1, bufferStatus.max)) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-sm tabular-nums text-muted-foreground">
+                  {bufferStatus.count} / {bufferStatus.max}
+                </span>
+                {bufferStatus.needsRefill ? (
+                  <span className="text-xs font-medium text-amber-700 dark:text-amber-300">{t("shortsAgent.bufferNeedsRefill")}</span>
+                ) : null}
+                {bufferStatus.atCap ? (
+                  <span className="text-xs font-medium text-muted-foreground">{t("shortsAgent.bufferAtCap")}</span>
+                ) : null}
+              </div>
+            )}
+
             {queueLoading ? (
               <div className="py-12 text-center text-muted-foreground">{t("common.loading")}</div>
             ) : queue.length === 0 ? (
@@ -1534,8 +1686,12 @@ export default function ShortsAgent() {
                     <tr>
                       <th className="px-4 py-3">{t("shortsAgent.platform")}</th>
                       <th className="px-4 py-3">{t("shortsAgent.content")}</th>
+                      <th className="px-4 py-3">{t("shortsAgent.queueColJobId")}</th>
+                      <th className="px-4 py-3">{t("shortsAgent.queueColYoutubeKey")}</th>
+                      <th className="px-4 py-3">{t("shortsAgent.queueColLanguage")}</th>
                       <th className="px-4 py-3">{t("shortsAgent.scheduledAt")}</th>
                       <th className="px-4 py-3">{t("shortsAgent.status")}</th>
+                      <th className="px-4 py-3">{t("shortsAgent.queueColError")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y border-border">
@@ -1552,10 +1708,18 @@ export default function ShortsAgent() {
                           </div>
                         </td>
                         <td className="px-4 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-foreground font-medium">{item.metadata?.title || "AI Content"}</span>
-                            <span className="text-[10px] text-muted-foreground">{item.jobId}</span>
+                          <div className="flex flex-col max-w-[200px]">
+                            <span className="text-foreground font-medium truncate">{item.metadata?.title || "AI Content"}</span>
                           </div>
+                        </td>
+                        <td className="px-4 py-4 font-mono text-[10px] text-muted-foreground max-w-[100px] truncate" title={item.jobId}>
+                          {item.jobId}
+                        </td>
+                        <td className="px-4 py-4 text-xs text-muted-foreground font-mono max-w-[80px] truncate" title={item.metadata?.youtubeKey}>
+                          {item.metadata?.youtubeKey ?? "—"}
+                        </td>
+                        <td className="px-4 py-4 text-xs text-muted-foreground">
+                          {item.metadata?.outputLanguage ?? "—"}
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2 text-muted-foreground">
@@ -1585,6 +1749,9 @@ export default function ShortsAgent() {
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-4 py-4 text-xs text-destructive max-w-[160px]">
+                          <span className="line-clamp-3 break-words" title={item.error}>{item.error || "—"}</span>
                         </td>
                       </tr>
                     ))}

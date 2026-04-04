@@ -62,6 +62,7 @@ function assertNoDeployErrors(requested: DeployPlatform[], errors: Partial<Recor
 }
 import { updateVideoStats } from "./shorts/shortsStatsService.js";
 import { loadJobsFromFile, saveJobsToFile } from "./shortsJobStore.js";
+import { assertCanStartShortsPipeline } from "./shortsGenerationLimits.js";
 import {
   copyVideoToStorage,
   isExpired,
@@ -231,6 +232,15 @@ export interface RunPipelineOptions {
   languageOverride?: string;
   /** OSMU 활성화: 영상 생성 시 블로그 포스트 자동 동 동시 생성 */
   enableOsmu?: boolean;
+  /** 다계정 팬아웃 시 선행 작업 ID */
+  parentJobId?: string;
+  /** 버퍼 리필 등 — 일일/동시 생성 한도 스킵 */
+  skipGenerationLimits?: boolean;
+}
+
+export interface FanoutPipelineTarget {
+  youtubeKey: string;
+  languageOverride?: string;
 }
 
 /**
@@ -264,9 +274,14 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     category,
     sourceLanguage,
     languageOverride,
+    parentJobId: parentJobIdOpt,
+    skipGenerationLimits,
   } = options ?? {};
 
+  await assertCanStartShortsPipeline({ skipLimits: skipGenerationLimits === true });
+
   const uploadMode = uploadModeOpt ?? (defaults?.autoUpload === false ? "review_first" : "immediate");
+  const effectiveLanguage = (languageOverride ?? defaults?.language ?? "ko").toString().trim() || "ko";
   const merged = {
     ownerUserId: ownerUserIdOpt,
     avatarPresetId,
@@ -291,7 +306,7 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     reasoning,
     category,
     sourceLanguage,
-    languageOverride,
+    languageOverride: effectiveLanguage,
   };
 
   const jobId = `job-${Date.now()}-${simpleHash(keywords.join(","))}`;
@@ -302,7 +317,10 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
     createdAt: now,
     updatedAt: now,
     pipelineFormat: pipelineFormatFromMergedFormat(merged.format),
+    outputLanguage: effectiveLanguage,
+    youtubeKey,
     ...(ownerUserIdOpt ? { ownerUserId: ownerUserIdOpt } : {}),
+    ...(parentJobIdOpt ? { parentJobId: parentJobIdOpt } : {}),
   };
   JOBS.set(jobId, job);
   await persistJobs();
@@ -313,6 +331,35 @@ export async function runPipelineOnce(keywords: string[], options?: RunPipelineO
   });
 
   return job;
+}
+
+/**
+ * 동일 소스로 계정·언어별로 별도 job 생성 (첫 jobId를 이후 job의 parentJobId로 연결)
+ */
+export async function runPipelineFanout(
+  keywords: string[],
+  targets: FanoutPipelineTarget[],
+  shared: Omit<RunPipelineOptions, "youtubeKey" | "parentJobId">
+): Promise<ShortsPipelineJob[]> {
+  if (!targets.length) throw new Error("At least one target account required");
+  await ensureJobsLoaded();
+  const jobs: ShortsPipelineJob[] = [];
+  let groupParentId: string | undefined;
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i];
+    const chDefaults = await getChannelDefaults(t.youtubeKey);
+    const lang =
+      (t.languageOverride ?? chDefaults?.language ?? shared.languageOverride ?? "ko").toString().trim() || "ko";
+    const job = await runPipelineOnce(keywords, {
+      ...shared,
+      youtubeKey: t.youtubeKey,
+      languageOverride: lang,
+      parentJobId: i === 0 ? undefined : groupParentId,
+    });
+    if (i === 0) groupParentId = job.jobId;
+    jobs.push(job);
+  }
+  return jobs;
 }
 
 /** 실제 파이프라인 로직 (내부용) */
@@ -558,6 +605,14 @@ export async function uploadJob(
   job.updatedAt = new Date().toISOString();
   await persistJobs();
   return job;
+}
+
+/** 배포 대기용 버퍼: video_ready + 실제 미디어(스텁 제외) */
+export async function countShortsBufferEligibleJobs(): Promise<number> {
+  await ensureJobsLoaded();
+  return Array.from(JOBS.values()).filter(
+    (j) => j.status === "video_ready" && !j.videoStub && !!(j.videoPath || j.supabaseUrl)
+  ).length;
 }
 
 export async function listJobsAsync(limit = 20): Promise<ShortsPipelineJob[]> {

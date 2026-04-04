@@ -7,6 +7,7 @@ import {
   type DeployPlatform,
 } from "./shorts/shortsDeployAgent.js";
 import { YOUTUBE_LEGACY_USER_SENTINEL } from "./youtubeUploadService.js";
+import { alertDistributionPermanentFailure } from "./shortsAlertService.js";
 
 const QUEUE_TABLE = "shorts_distribution_queue";
 
@@ -27,53 +28,77 @@ function rowToCamel(row: Record<string, any>): DistributionQueueItem {
   };
 }
 
-/** 플랫폼별 맞춤 메타데이터 생성 (AI 에이전트 모사) */
-function generatePlatformMetadata(job: ShortsPipelineJob, platform: string) {
+const DISTRIBUTION_MAX_RETRIES = 5;
+
+/** 플랫폼별 맞춤 메타데이터 + 배포 식별 필드 */
+function generatePlatformMetadata(
+  job: ShortsPipelineJob,
+  platform: string,
+  opts: { youtubeKey: string; outputLanguage: string }
+) {
   const baseTitle = job.script?.topicTitle || "AI Trend Video";
   const baseHook = job.script?.hook || "";
-  
-  switch(platform) {
+
+  const base = {
+    youtubeKey: opts.youtubeKey,
+    outputLanguage: opts.outputLanguage,
+  };
+
+  switch (platform) {
     case "youtube":
       return {
+        ...base,
         title: baseTitle.slice(0, 100),
         description: `${baseHook}\n\n#Shorts #AI #Trending`,
       };
     case "tiktok":
       return {
+        ...base,
         title: baseTitle,
         description: `${baseHook} 🚀 #fyp #ai #trending #viral`,
       };
     case "instagram":
       return {
+        ...base,
         title: baseTitle,
         description: `${baseHook}\n.\n.\n#ai #reels #trending #insight`,
       };
     default:
       return {
+        ...base,
         title: baseTitle,
         description: baseHook,
       };
   }
 }
 
+function distributionBackoffMs(retryCount: number): number {
+  const step = Math.max(0, retryCount - 1);
+  return Math.min(60_000 * Math.pow(2, step), 3_600_000);
+}
+
 /**
  * 작업을 배포 대기열에 추가
  */
 export async function addToDistributionQueue(
-  jobId: string, 
-  platforms: string[], 
-  options: { scheduledAt?: string } = {}
+  jobId: string,
+  platforms: string[],
+  options: { scheduledAt?: string; youtubeKey?: string } = {}
 ): Promise<DistributionQueueItem[]> {
   const supabase = getSupabaseAdmin();
   const job = await getJobAsync(jobId);
   if (!job) throw new Error("Job not found");
 
+  const ytKey =
+    (options.youtubeKey ?? job.youtubeKey ?? "default").toString().trim() || "default";
+  const outputLang = (job.outputLanguage ?? "ko").toString().trim() || "ko";
+
   // DB column names are snake_case; DistributionQueueItem uses camelCase for in-memory use.
   const items = platforms.map((platform, index) => {
     const randomOffset = Math.floor(Math.random() * 15 * 60000);
-    const scheduledDate = options.scheduledAt 
-      ? new Date(new Date(options.scheduledAt).getTime() + (index * 3600000) + randomOffset) 
-      : new Date(Date.now() + ((index + 1) * 3600000) + randomOffset);
+    const scheduledDate = options.scheduledAt
+      ? new Date(new Date(options.scheduledAt).getTime() + index * 3600000 + randomOffset)
+      : new Date(Date.now() + (index + 1) * 3600000 + randomOffset);
 
     return {
       job_id: jobId,
@@ -81,7 +106,7 @@ export async function addToDistributionQueue(
       status: "waiting" as const,
       scheduled_at: scheduledDate.toISOString(),
       retry_count: 0,
-      metadata: generatePlatformMetadata(job, platform),
+      metadata: generatePlatformMetadata(job, platform, { youtubeKey: ytKey, outputLanguage: outputLang }),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -129,9 +154,10 @@ export async function processDistributionQueue(opts: { limit?: number } = {}): P
   processed: number;
   success: number;
   failed: number;
+  retried: number;
 }> {
   const supabase = getSupabaseAdmin();
-  if (!supabase) return { processed: 0, success: 0, failed: 0 };
+  if (!supabase) return { processed: 0, success: 0, failed: 0, retried: 0 };
 
   const now = new Date().toISOString();
   const limit = Math.min(50, Math.max(1, opts.limit ?? 5));
@@ -142,12 +168,13 @@ export async function processDistributionQueue(opts: { limit?: number } = {}): P
     .lte("scheduled_at", now)
     .limit(limit);
 
-  if (error || !rows) return { processed: 0, success: 0, failed: 0 };
+  if (error || !rows) return { processed: 0, success: 0, failed: 0, retried: 0 };
 
   const items = (rows as any[]).map(rowToCamel);
   let processed = 0;
   let success = 0;
   let failed = 0;
+  let retried = 0;
 
   for (const item of items) {
     processed += 1;
@@ -205,20 +232,30 @@ export async function processDistributionQueue(opts: { limit?: number } = {}): P
     } catch (err) {
       console.error(`[Distribution Worker Error] Item ${item.id}:`, err);
       const retryCount = (item.retryCount || 0) + 1;
-      const nextStatus = retryCount >= 3 ? "failed" : "waiting";
-      
-      await supabase.from(QUEUE_TABLE).update({ 
-        status: nextStatus, 
+      const nextStatus = retryCount >= DISTRIBUTION_MAX_RETRIES ? "failed" : "waiting";
+      const delay = distributionBackoffMs(retryCount);
+
+      await supabase.from(QUEUE_TABLE).update({
+        status: nextStatus,
         error: String(err),
         retry_count: retryCount,
-        scheduled_at: new Date(Date.now() + 3600000).toISOString(),
-        updated_at: new Date().toISOString() 
+        scheduled_at: new Date(Date.now() + delay).toISOString(),
+        updated_at: new Date().toISOString(),
       }).eq("id", item.id);
-      failed += 1;
+      if (nextStatus === "waiting") retried += 1;
+      else {
+        failed += 1;
+        await alertDistributionPermanentFailure(
+          item.jobId,
+          item.platform,
+          String(err),
+          item.id
+        );
+      }
     }
   }
 
-  return { processed, success, failed };
+  return { processed, success, failed, retried };
 }
 
 // 5분마다 대기열 처리. 주의: Vercel 등 서버리스에서는 프로세스가 상주하지 않아 이 타이머가 사실상 동작하지 않을 수 있음 → 상시 백엔드 또는 Cron 필요.

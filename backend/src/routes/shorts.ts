@@ -11,6 +11,7 @@ const ACCOUNT_REQUESTS_PATH = join(getLocalDataDir(), "account-requests.json");
 import {
   collectTrendTopics,
   runPipelineOnce,
+  runPipelineFanout,
   listJobs,
   getJob,
   listJobsAsync,
@@ -25,6 +26,7 @@ import {
   failRemoteAssembly,
   finalizeRemoteAssemblySuccess,
 } from "../services/shortsAgentService.js";
+import { getShortsBufferStatus, refillShortsBuffer } from "../services/shortsBufferService.js";
 import {
   addToDistributionQueue,
   getDistributionQueue,
@@ -80,6 +82,15 @@ function isYoutubeCallback(request: FastifyRequest): boolean {
  * 우선순위: FRONTEND_ORIGIN → Vercel 프록시 헤더 → 안전한 Referer → 로컬 기본.
  * (Google 리다이렉트 시 Referer가 google.com일 수 있어 그 경우는 무시)
  */
+function getShortsWorkerSecretFromRequest(request: FastifyRequest): string {
+  const h = request.headers["x-shorts-worker-secret"];
+  const fromX = (typeof h === "string" ? h : Array.isArray(h) ? h[0] : undefined)?.trim() ?? "";
+  if (fromX) return fromX;
+  const auth = request.headers.authorization;
+  if (typeof auth === "string" && auth.startsWith("Bearer ")) return auth.slice(7).trim();
+  return "";
+}
+
 function resolveFrontendOrigin(request: FastifyRequest): string {
   const fromEnv = (process.env.FRONTEND_ORIGIN ?? "").trim().replace(/\/$/, "");
   if (fromEnv) return fromEnv;
@@ -118,16 +129,17 @@ export async function shortsRoutes(app: FastifyInstance) {
     if (isYoutubeCallback(request)) return;
 
     const workerSecret = process.env.SHORTS_WORKER_SECRET ?? "";
-    const workerSecretHeader = request.headers["x-shorts-worker-secret"];
-    const providedSecret =
-      (typeof workerSecretHeader === "string" ? workerSecretHeader : Array.isArray(workerSecretHeader) ? workerSecretHeader[0] : undefined)?.trim() ?? "";
+    const providedSecret = getShortsWorkerSecretFromRequest(request);
 
     const reqUrl = request.url ?? "";
+    const method = request.method ?? "GET";
     const isQueueWorkerEndpoint =
-      request.method === "POST" && reqUrl.includes("/distribution/queue/process");
-    const isAssemblyPending = request.method === "GET" && reqUrl.includes("/assembly/pending-jobs");
-    const isAssemblyComplete = request.method === "POST" && reqUrl.includes("/assembly/complete");
-    const isAssemblyClaim = request.method === "POST" && reqUrl.includes("/assembly/claim");
+      (method === "POST" || method === "GET") && reqUrl.includes("/distribution/queue/process");
+    const isBufferRefill =
+      (method === "POST" || method === "GET") && reqUrl.includes("/buffer/refill");
+    const isAssemblyPending = method === "GET" && reqUrl.includes("/assembly/pending-jobs");
+    const isAssemblyComplete = method === "POST" && reqUrl.includes("/assembly/complete");
+    const isAssemblyClaim = method === "POST" && reqUrl.includes("/assembly/claim");
 
     const MAX_SECRET_LEN = 200;
     const secretsMatch = (() => {
@@ -140,7 +152,11 @@ export async function shortsRoutes(app: FastifyInstance) {
 
     const isShortsWorkerBypass =
       secretsMatch &&
-      (isQueueWorkerEndpoint || isAssemblyPending || isAssemblyComplete || isAssemblyClaim);
+      (isQueueWorkerEndpoint ||
+        isBufferRefill ||
+        isAssemblyPending ||
+        isAssemblyComplete ||
+        isAssemblyClaim);
 
     if (isShortsWorkerBypass) {
       return;
@@ -177,12 +193,25 @@ export async function shortsRoutes(app: FastifyInstance) {
     const onVercel = process.env.VERCEL === "1";
     const remoteAssemblyEnabled = process.env.SHORTS_DISABLE_REMOTE_ASSEMBLY !== "1";
     const workerSecretConfigured = Boolean((process.env.SHORTS_WORKER_SECRET ?? "").trim());
+    const productionAssemblyHint = onVercel
+      ? remoteAssemblyEnabled
+        ? "vercel_remote_assembly_worker"
+        : "vercel_needs_remote_assembly_or_docker_api"
+      : "standard_host_ffmpeg";
+    const recommendedNextStep = onVercel
+      ? remoteAssemblyEnabled && workerSecretConfigured
+        ? "Run a worker that polls GET /api/shorts/assembly/pending-jobs and POST /api/shorts/assembly/complete."
+        : "Set SHORTS_WORKER_SECRET and enable remote assembly, or run the API on a Docker/VM host with FFmpeg."
+      : "Ensure FFmpeg is on PATH; see docs/SHORTS_PRODUCTION_E2E.md";
     if (onVercel) {
       return {
         ffmpegInstalled: false,
         deployTarget: "vercel" as const,
         remoteAssemblyEnabled,
         workerSecretConfigured,
+        productionAssemblyHint,
+        recommendedNextStep,
+        docsPath: "docs/SHORTS_PRODUCTION_E2E.md",
       };
     }
     const ffmpegInstalled = await checkFfmpegInstalled();
@@ -191,7 +220,29 @@ export async function shortsRoutes(app: FastifyInstance) {
       deployTarget: "standard" as const,
       remoteAssemblyEnabled,
       workerSecretConfigured,
+      productionAssemblyHint,
+      recommendedNextStep,
+      docsPath: "docs/SHORTS_PRODUCTION_E2E.md",
     };
+  });
+
+  /** 배포용 버퍼 상태 (video_ready 재고 카운트) */
+  app.get("/buffer/status", async () => {
+    const status = await getShortsBufferStatus();
+    return status;
+  });
+
+  /**
+   * 버퍼 자동 리필 (Cron/VM). SHORTS_WORKER_SECRET 또는 Authorization: Bearer 동일 값.
+   * 환경: SHORTS_BUFFER_OWNER_USER_ID 필수, SHORTS_BUFFER_MAX/MIN/TARGET/KEYWORDS 등.
+   */
+  app.route({
+    method: ["GET", "POST"],
+    url: "/buffer/refill",
+    handler: async () => {
+      const result = await refillShortsBuffer();
+      return { ok: true, ...result };
+    },
   });
 
   /** 원격 조립 대기 job 목록 (X-Shorts-Worker-Secret) */
@@ -426,6 +477,9 @@ export async function shortsRoutes(app: FastifyInstance) {
       bgmMood?: string;
       bgmVolume?: number;
       platforms?: string[];
+      /** 스크립트/TTS 출력 언어 (채널 기본값보다 우선) */
+      languageOverride?: string;
+      sourceLanguage?: string;
     };
   }>("/run", async (request, reply: FastifyReply) => {
     const body = request.body ?? {};
@@ -453,8 +507,82 @@ export async function shortsRoutes(app: FastifyInstance) {
       bgmMood: body.bgmMood,
       bgmVolume: body.bgmVolume,
       platforms,
+      languageOverride: body.languageOverride != null ? String(body.languageOverride).trim() || undefined : undefined,
+      sourceLanguage: body.sourceLanguage != null ? String(body.sourceLanguage).trim() || undefined : undefined,
     });
     return job;
+  });
+
+  type FanoutBody = {
+    keywords?: string[];
+    targets?: { youtubeKey?: string; languageOverride?: string }[];
+    avatarPresetId?: string;
+    enableTts?: boolean;
+    noBgm?: boolean;
+    voiceGender?: "female" | "male" | "neutral";
+    voiceAge?: "child" | "young" | "adult" | "mature";
+    voiceTone?: "bright" | "warm" | "calm" | "friendly" | "authoritative";
+    voiceSpeed?: number;
+    voicePitch?: "high" | "medium" | "low";
+    format?: "shorts" | "long";
+    targetDurationSeconds?: number;
+    uploadMode?: "immediate" | "review_first";
+    characterAge?: "child" | "young" | "adult" | "mature";
+    characterGender?: "female" | "male" | "neutral";
+    bgmGenre?: string;
+    bgmMood?: string;
+    bgmVolume?: number;
+    platforms?: string[];
+    languageOverride?: string;
+    sourceLanguage?: string;
+  };
+
+  /** 다계정·언어별로 동일 토픽 소스로 job N건 생성 (parentJobId로 그룹) */
+  app.post<{ Body: FanoutBody }>("/run/fanout", async (request: FastifyRequest<{ Body: FanoutBody }>, reply: FastifyReply) => {
+    const body = request.body ?? {};
+    const rawTargets = Array.isArray(body.targets) ? body.targets : [];
+    const targets = rawTargets
+      .map((t) => ({
+        youtubeKey: (t?.youtubeKey ?? "").toString().trim(),
+        languageOverride: t?.languageOverride != null ? String(t.languageOverride).trim() || undefined : undefined,
+      }))
+      .filter((t) => t.youtubeKey.length > 0);
+    if (!targets.length) {
+      return reply.code(400).send({ error: "targets with youtubeKey required" });
+    }
+    const keywords = Array.isArray(body.keywords) ? body.keywords.filter(Boolean) : [];
+    const platforms = Array.isArray(body.platforms)
+      ? body.platforms.filter((p): p is "youtube" | "tiktok" | "instagram" | "facebook" =>
+          ["youtube", "tiktok", "instagram", "facebook"].includes(p))
+      : undefined;
+    const ownerUserId = (await getAuthUserFromRequest(request))?.id ?? "";
+    try {
+      const jobs = await runPipelineFanout(keywords, targets, {
+        ownerUserId: ownerUserId || undefined,
+        avatarPresetId: body.avatarPresetId ?? undefined,
+        enableTts: body.enableTts !== false,
+        noBgm: body.noBgm === true,
+        voiceGender: body.voiceGender,
+        voiceAge: body.voiceAge,
+        voiceTone: body.voiceTone,
+        voiceSpeed: body.voiceSpeed,
+        voicePitch: body.voicePitch,
+        format: body.format,
+        targetDurationSeconds: body.targetDurationSeconds,
+        uploadMode: body.uploadMode ?? "immediate",
+        characterAge: body.characterAge,
+        characterGender: body.characterGender,
+        bgmGenre: body.bgmGenre,
+        bgmMood: body.bgmMood,
+        bgmVolume: body.bgmVolume,
+        platforms,
+        languageOverride: body.languageOverride != null ? String(body.languageOverride).trim() || undefined : undefined,
+        sourceLanguage: body.sourceLanguage != null ? String(body.sourceLanguage).trim() || undefined : undefined,
+      });
+      return { jobs, parentJobId: jobs[0]?.jobId };
+    } catch (e) {
+      return reply.code(400).send({ error: e instanceof Error ? e.message : "fanout failed" });
+    }
   });
 
   /** 저장된 영상 목록 (videoPath 있음, 만료 제외) */
@@ -528,26 +656,27 @@ export async function shortsRoutes(app: FastifyInstance) {
   });
 
   /** 배포 대기열에 추가 (복수 작업 지원) */
-  app.post<{ Body: { jobIds: string[]; platforms: string[]; scheduledAt?: string } }>(
-    "/distribution/queue",
-    async (request, reply) => {
-      const { jobIds, platforms, scheduledAt } = request.body;
-      if (!jobIds?.length || !platforms?.length) {
-        return reply.code(400).send({ error: "jobIds and platforms required" });
-      }
-
-      const results = [];
-      for (const jobId of jobIds) {
-        try {
-          const items = await addToDistributionQueue(jobId, platforms, { scheduledAt });
-          results.push({ jobId, success: true, items });
-        } catch (e) {
-          results.push({ jobId, success: false, error: (e as Error).message });
-        }
-      }
-      return { results };
+  app.post<{
+    Body: { jobIds: string[]; platforms: string[]; scheduledAt?: string; youtubeKey?: string };
+  }>("/distribution/queue", async (request, reply) => {
+    const body = request.body ?? ({} as { jobIds?: string[]; platforms?: string[]; scheduledAt?: string; youtubeKey?: string });
+    const { jobIds, platforms, scheduledAt, youtubeKey } = body;
+    if (!jobIds?.length || !platforms?.length) {
+      return reply.code(400).send({ error: "jobIds and platforms required" });
     }
-  );
+
+    const ytOpt = youtubeKey != null ? String(youtubeKey).trim() || undefined : undefined;
+    const results = [];
+    for (const jobId of jobIds) {
+      try {
+        const items = await addToDistributionQueue(jobId, platforms, { scheduledAt, youtubeKey: ytOpt });
+        results.push({ jobId, success: true, items });
+      } catch (e) {
+        results.push({ jobId, success: false, error: (e as Error).message });
+      }
+    }
+    return { results };
+  });
 
   /** 배포 대기열 조회 */
   app.get("/distribution/queue", async () => {
@@ -555,13 +684,28 @@ export async function shortsRoutes(app: FastifyInstance) {
     return { queue };
   });
 
-  /** 배포 대기열 워커 1회 실행 (Cron/VM용). X-Shorts-Worker-Secret 필요 */
-  app.post<{
+  /** 배포 대기열 워커 1회 실행 (Cron/VM용). Secret: X-Shorts-Worker-Secret 또는 Bearer */
+  app.route<{
+    Querystring: { limit?: string };
     Body: { limit?: number };
-  }>("/distribution/queue/process", async (request: FastifyRequest<{ Body: { limit?: number } }>) => {
-    const limit = request.body?.limit;
-    const result = await processDistributionQueue({ limit: typeof limit === "number" ? limit : undefined });
-    return { ok: true, ...result };
+  }>({
+    method: ["GET", "POST"],
+    url: "/distribution/queue/process",
+    handler: async (request: FastifyRequest<{ Querystring: { limit?: string }; Body: { limit?: number } }>) => {
+      let limit: number | undefined;
+      if (request.method === "GET") {
+        const q = request.query?.limit;
+        if (q != null && String(q).trim() !== "") {
+          const n = parseInt(String(q), 10);
+          if (Number.isFinite(n)) limit = n;
+        }
+      } else {
+        const n = request.body?.limit;
+        if (typeof n === "number" && Number.isFinite(n)) limit = n;
+      }
+      const result = await processDistributionQueue({ limit });
+      return { ok: true, ...result };
+    },
   });
 
   /** 연재 시리즈 목록 */

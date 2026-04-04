@@ -1,4 +1,14 @@
 {
+  "crons": [
+    {
+      "path": "/api/index?path=shorts/distribution/queue/process",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/index?path=shorts/buffer/refill",
+      "schedule": "0 * * * *"
+    }
+  ],
   "buildCommand": "npm run build",
   "outputDirectory": "frontend/dist",
   "installCommand": "npm install",

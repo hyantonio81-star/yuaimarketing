@@ -268,11 +268,41 @@ export const shortsApi = {
       bgmMood: options?.bgmMood,
       bgmVolume: options?.bgmVolume,
       platforms: options?.platforms,
+      languageOverride: options?.languageOverride,
+      sourceLanguage: options?.sourceLanguage,
     }).then((r) => r.data),
+  /** 동일 키워드로 계정별 별도 job (서버에서 채널 기본 언어 병합) */
+  runFanout: (keywords, targets, options) =>
+    api
+      .post("/shorts/run/fanout", {
+        keywords: keywords ?? [],
+        targets: targets ?? [],
+        avatarPresetId: options?.avatarPresetId,
+        enableTts: options?.enableTts,
+        noBgm: options?.noBgm,
+        voiceGender: options?.voiceGender,
+        voiceAge: options?.voiceAge,
+        voiceTone: options?.voiceTone,
+        voiceSpeed: options?.voiceSpeed,
+        voicePitch: options?.voicePitch,
+        format: options?.format,
+        targetDurationSeconds: options?.targetDurationSeconds,
+        uploadMode: options?.uploadMode,
+        characterAge: options?.characterAge,
+        characterGender: options?.characterGender,
+        bgmGenre: options?.bgmGenre,
+        bgmMood: options?.bgmMood,
+        bgmVolume: options?.bgmVolume,
+        platforms: options?.platforms,
+        languageOverride: options?.languageOverride,
+        sourceLanguage: options?.sourceLanguage,
+      })
+      .then((r) => r.data),
   getPlatforms: () =>
     api.get("/shorts/platforms").then((r) => r.data),
   getHealth: () =>
     api.get("/shorts/health").then((r) => r.data),
+  getBufferStatus: () => api.get("/shorts/buffer/status").then((r) => r.data),
   getJobs: (limit) =>
     api.get("/shorts/jobs", { params: { limit } }).then((r) => r.data),
   getJob: (jobId) =>
@@ -324,8 +354,17 @@ export const shortsApi = {
     api.put(`/shorts/channel-profiles/${encodeURIComponent(key)}`, profile, { params: { platform } }).then((r) => r.data),
   
   /** 배포 관리 API */
-  addToDistributionQueue: (jobIds, platforms, scheduledAt) =>
-    api.post("/shorts/distribution/queue", { jobIds, platforms, scheduledAt }).then((r) => r.data),
+  addToDistributionQueue: (jobIds, platforms, scheduledAtOrOpts) => {
+    const payload = { jobIds, platforms };
+    if (scheduledAtOrOpts != null) {
+      if (typeof scheduledAtOrOpts === "string") payload.scheduledAt = scheduledAtOrOpts;
+      else if (typeof scheduledAtOrOpts === "object") {
+        if (scheduledAtOrOpts.scheduledAt) payload.scheduledAt = scheduledAtOrOpts.scheduledAt;
+        if (scheduledAtOrOpts.youtubeKey) payload.youtubeKey = scheduledAtOrOpts.youtubeKey;
+      }
+    }
+    return api.post("/shorts/distribution/queue", payload).then((r) => r.data);
+  },
   getDistributionQueue: () =>
     api.get("/shorts/distribution/queue").then((r) => r.data),
 

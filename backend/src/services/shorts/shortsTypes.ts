@@ -133,6 +133,12 @@ export interface ShortsPipelineJob {
   youtubeProcessingDetail?: string;
   /** 업로드 시 YouTube 프리셋 (롱폼 vs Shorts 링크·태그) */
   pipelineFormat?: "shorts" | "long";
+  /** 파이프라인에 사용된 YouTube 계정 키 (배포 큐 기본값·메타데이터) */
+  youtubeKey?: string;
+  /** 실제 스크립트/TTS에 적용된 출력 언어(BCP-47 계열) 스냅샷 */
+  outputLanguage?: string;
+  /** 다계정 팬아웃 시 첫 번째 작업 jobId */
+  parentJobId?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -65,6 +65,8 @@ export async function adminRoutes(app: FastifyInstance) {
       // Shorts stats & jobs
       { table: "shorts_stats", column: "job_id" },
       { table: "shorts_jobs", column: "id" },
+      { table: "shorts_pipeline_jobs", column: "job_id" },
+      { table: "shorts_daily_generation", column: "day" },
       { table: "shorts_distribution_queue", column: "id" },
 
       // Extended app state used across modules

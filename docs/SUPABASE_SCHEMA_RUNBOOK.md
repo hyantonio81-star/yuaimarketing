@@ -27,6 +27,7 @@ Shorts·확장 테이블은 migrations에만 있습니다 (`20260225120000_*`, `
 | 5 | `20260225140000_shorts_distribution_queue.sql` | Shorts 배포 대기열: `shorts_distribution_queue` |
 | 6 | `20260225150000_enable_rls_b2c_tables.sql` | B2C·코어 테이블 RLS 활성화 (anon 직접 접근 차단) |
 | 7 | `20260403180000_youtube_oauth_store.sql` | YouTube OAuth: `youtube_oauth_store` (사용자별 `tokens`·`labels` JSON, 서버 전용) |
+| 8 | `20260404130000_shorts_pipeline_jobs_row_store.sql` | Shorts: `shorts_pipeline_jobs` (job 행), `shorts_daily_generation`, RPC `shorts_claim_daily_generation` |
 
 동일 내용 복사본(SQL Editor용): [supabase-b2c-migrations.sql](./supabase-b2c-migrations.sql), [supabase-24-7-migrations.sql](./supabase-24-7-migrations.sql).
 
