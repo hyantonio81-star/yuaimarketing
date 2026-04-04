@@ -34,7 +34,7 @@
 | `YOUTUBE_POLL_PROCESSING` | 선택 | `0`이면 업로드 후 YouTube 처리 폴링 안 함 | 기본 폴링 |
 | `YOUTUBE_OAUTH_STATE_SECRET` 또는 `CONNECTION_PIN_SECRET` | **Vercel/프로덕션 필수** | OAuth `state` HMAC에 Supabase `auth.users.id` 포함 | 없으면 토큰이 placeholder `user_id`에만 저장되어 연동 UI가 항상 비어 있음 |
 
-**원격 조립 워커(로컬/VPS)** 루트에서: `SHORTS_API_BASE`, `SHORTS_WORKER_SECRET`, Supabase 키 설정 후 `npm run shorts:assembly-worker` ([SHORTS_AGENT.md](./SHORTS_AGENT.md)).
+**원격 조립 워커(로컬/VPS)** 루트에서 `npm run shorts:assembly-worker` — `SHORTS_API_BASE`·`SHORTS_WORKER_SECRET`·Supabase·`FFMPEG_PATH`는 **`backend/.env`에만** 넣어도 됨(워커가 merge, 조립 CLI는 `dotenv`로 동일 파일 로드). ([SHORTS_AGENT.md](./SHORTS_AGENT.md), `frontend/public/docs/SHORTS_REMOTE_ASSEMBLY.md`)
 
 - `GET /api/shorts/health`는 `workerSecretConfigured`(서버에 `SHORTS_WORKER_SECRET` 비어 있지 않은지)를 반환합니다. 시크릿 값 자체는 노출되지 않습니다.
 - FFmpeg 포함 백엔드 컨테이너: 리포 루트에서 `docker build -f backend/Dockerfile .`

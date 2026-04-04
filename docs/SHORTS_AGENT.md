@@ -12,7 +12,7 @@
 - **Vercel**에서는 일반적으로 FFmpeg 바이너리가 없어 로컬 조립이 불가합니다. `GET /api/shorts/health`는 `ffmpegInstalled`, `deployTarget`, `remoteAssemblyEnabled`, `workerSecretConfigured`(서버에 `SHORTS_WORKER_SECRET` 존재 여부)를 반환합니다.
 - **Docker (FFmpeg 포함 백엔드)**: 리포지토리 루트에서 `docker build -f backend/Dockerfile .` 후 컨테이너로 실행. 앱 내 정적 안내: `/docs/SHORTS_REMOTE_ASSEMBLY.md`, `/docs/FFMPEG_SETUP.md`.
 - **원격 조립**: `VERCEL=1`(또는 `SHORTS_DELEGATE_ASSEMBLY=1`)이고 FFmpeg가 없으면, 파이프라인이 자산을 스토리지에 올린 뒤 job 상태를 `pending_assembly`로 두고 매니페스트를 저장합니다.
-- **워커**: 루트에서 `npm run shorts:assembly-worker` — 환경 변수 `SHORTS_API_BASE`(예: `https://…/api/shorts`), `SHORTS_WORKER_SECRET`, 그리고 백엔드와 동일한 Supabase 키(업로드용). 워커는 `assembly/pending-jobs` → `claim` → 로컬 FFmpeg 조립 → `complete` 순으로 호출합니다.
+- **워커**: 루트에서 `npm run shorts:assembly-worker` — `SHORTS_API_BASE`(예: `https://…/api/shorts`), `SHORTS_WORKER_SECRET`은 환경 변수 또는 **`backend/.env`**(워커가 시작 시 merge). Supabase·`FFMPEG_PATH`도 `backend/.env`에 두면 조립 CLI가 그대로 사용합니다. 워커는 `assembly/pending-jobs` → `claim` → 로컬 FFmpeg 조립 → `complete` 순으로 호출합니다.
 - **끄기**: `SHORTS_DISABLE_REMOTE_ASSEMBLY=1` 이면 원격 조립 분기가 비활성화됩니다.
 
 ## YouTube 업로드 프리셋

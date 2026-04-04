@@ -2,17 +2,20 @@
 /**
  * Shorts 원격 FFmpeg 조립 워커 (Vercel 밖에서 실행)
  *
- * Env:
+ * Env (또는 backend/.env — 아래 merge; 이미 설정된 process.env 가 우선):
  *   SHORTS_API_BASE   — 예: https://your-app.vercel.app/api/shorts (끝 슬래시 없음)
  *   SHORTS_WORKER_SECRET — Vercel과 동일한 비밀키
- *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — 최종 mp4 업로드용 (backend .env와 동일)
+ *   FFMPEG_PATH — backend/.env 에만 있어도 됨 (자식 tsx 가 dotenv 로 backend/.env 로드)
+ *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — 자식 runManifestAssembly 가 backend/.env 에서 로드
  *
  * 한 사이클: pending 목록 → claim → 로컬에서 tsx로 조립·업로드 → complete
  *
  * Usage:
- *   SHORTS_API_BASE=... SHORTS_WORKER_SECRET=... node scripts/shorts-assembly-worker.mjs
+ *   npm run shorts:assembly-worker
+ *   또는 SHORTS_API_BASE=... SHORTS_WORKER_SECRET=... node scripts/shorts-assembly-worker.mjs
  */
 import { writeFile, mkdtemp, rm } from "node:fs/promises";
+import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -21,6 +24,38 @@ import { spawnSync } from "node:child_process";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
 const backendDir = join(repoRoot, "backend");
+const backendEnvPath = join(backendDir, ".env");
+
+/** backend/.env 를 읽어 비어 있지 않은 process.env 키만 채움 (기존 환경 변수는 덮어쓰지 않음) */
+function mergeBackendDotenv() {
+  if (!existsSync(backendEnvPath)) return;
+  let text;
+  try {
+    text = readFileSync(backendEnvPath, "utf-8");
+  } catch {
+    return;
+  }
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (!key) continue;
+    const cur = process.env[key];
+    if (cur !== undefined && cur !== "") continue;
+    let val = trimmed.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    process.env[key] = val;
+  }
+}
+
+mergeBackendDotenv();
 
 const base = (process.env.SHORTS_API_BASE ?? "").trim().replace(/\/$/, "");
 const secret = (process.env.SHORTS_WORKER_SECRET ?? "").trim();
@@ -78,7 +113,7 @@ for (const row of jobs) {
       cwd: backendDir,
       encoding: "utf-8",
       env: { ...process.env },
-      shell: process.platform === "win32",
+      shell: false,
     }
   );
 
